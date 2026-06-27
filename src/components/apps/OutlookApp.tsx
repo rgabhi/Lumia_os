@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Mail, MailOpen, Send, ChevronRight, ArrowLeft, Trash2, Edit3, CheckCircle } from 'lucide-react';
-import { Email } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Mail, MailOpen, Send, ChevronRight, ArrowLeft, Trash2, Edit3, CheckCircle, Phone } from 'lucide-react';
+import { Email, Intent } from '../../types';
 
 interface OutlookAppProps {
   onClose: () => void;
@@ -8,9 +8,21 @@ interface OutlookAppProps {
   emails: Email[];
   onMarkRead: (emailId: string) => void;
   onComposeEmail: (sender: string, subject: string, body: string) => void;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
+  onSendIntent?: (intent: Omit<Intent, 'id' | 'timestamp'>) => void;
 }
 
-export default function OutlookApp({ onClose, accentClass, emails, onMarkRead, onComposeEmail }: OutlookAppProps) {
+export default function OutlookApp({ 
+  onClose, 
+  accentClass, 
+  emails, 
+  onMarkRead, 
+  onComposeEmail,
+  activeIntent,
+  onClearActiveIntent,
+  onSendIntent
+}: OutlookAppProps) {
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose'>('inbox');
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
 
@@ -19,6 +31,44 @@ export default function OutlookApp({ onClose, accentClass, emails, onMarkRead, o
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [isSent, setIsSent] = useState(false);
+
+  // Handle incoming intent
+  useEffect(() => {
+    if (activeIntent) {
+      if (activeIntent.action === 'android.intent.action.SENDTO') {
+        const url = activeIntent.data || '';
+        const recipient = url.replace('mailto:', '');
+        if (recipient) {
+          setTo(recipient);
+        } else if (activeIntent.extras?.recipient) {
+          setTo(activeIntent.extras.recipient);
+        }
+        
+        if (activeIntent.extras?.subject) {
+          setSubject(activeIntent.extras.subject);
+        }
+        if (activeIntent.extras?.text) {
+          setBody(activeIntent.extras.text);
+        }
+        
+        setActiveTab('compose');
+        setSelectedEmail(null);
+      } else if (activeIntent.action === 'android.intent.action.SEND') {
+        if (activeIntent.extras?.text) {
+          setBody(activeIntent.extras.text);
+        }
+        if (activeIntent.extras?.subject) {
+          setSubject(activeIntent.extras.subject);
+        }
+        if (activeIntent.extras?.url) {
+          setBody(prev => prev ? `${prev}\n\nAttachment: ${activeIntent.extras?.url}` : `Attachment: ${activeIntent.extras?.url}`);
+        }
+        setActiveTab('compose');
+        setSelectedEmail(null);
+      }
+      onClearActiveIntent?.();
+    }
+  }, [activeIntent, onClearActiveIntent]);
 
   const handleReadEmail = (email: Email) => {
     setSelectedEmail(email);
@@ -77,14 +127,29 @@ export default function OutlookApp({ onClose, accentClass, emails, onMarkRead, o
       {selectedEmail ? (
         /* EMAIL READER VIEW */
         <div className="flex-1 flex flex-col min-h-0 animate-[fadeIn_0.2s_ease-out]">
-          <div className="flex items-center gap-3 border-b border-zinc-800 pb-4 mb-4">
-            <div className="w-10 h-10 bg-[#00abec] text-white flex items-center justify-center font-bold text-sm">
-              {selectedEmail.sender[0].toUpperCase()}
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#00abec] text-white flex items-center justify-center font-bold text-sm">
+                {selectedEmail.sender[0].toUpperCase()}
+              </div>
+              <div>
+                <p className="font-bold text-sm">{selectedEmail.sender}</p>
+                <p className="text-xs text-gray-400 font-mono">Sent {selectedEmail.timestamp}</p>
+              </div>
             </div>
-            <div>
-              <p className="font-bold text-sm">{selectedEmail.sender}</p>
-              <p className="text-xs text-gray-400 font-mono">Sent {selectedEmail.timestamp}</p>
-            </div>
+            <button
+              onClick={() => {
+                onSendIntent?.({
+                  action: 'android.intent.action.DIAL',
+                  data: `tel:${selectedEmail.sender.toLowerCase().includes('sarah') ? '555-0199' : '555-0144'}`,
+                  extras: { recipient: selectedEmail.sender, immediate: true }
+                });
+              }}
+              className="p-2 border border-zinc-800 bg-zinc-950 text-white/60 hover:text-[#00abec] hover:border-[#00abec] transition-all rounded-none"
+              title="Call Sender"
+            >
+              <Phone className="w-4 h-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             <h2 className="text-xl font-semibold tracking-tight leading-snug">{selectedEmail.subject}</h2>

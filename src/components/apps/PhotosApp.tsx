@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Check, Smartphone, Trash2 } from 'lucide-react';
-import { Photo } from '../../types';
+import { Photo, Intent } from '../../types';
 
 interface PhotosAppProps {
   onClose: () => void;
@@ -8,9 +8,21 @@ interface PhotosAppProps {
   photos: Photo[];
   onSetWallpaper: (url: string) => void;
   onDeletePhoto?: (photoId: string) => void;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
+  onSendIntent?: (intent: Omit<Intent, 'id' | 'timestamp'>) => void;
 }
 
-export default function PhotosApp({ onClose, accentClass, photos, onSetWallpaper, onDeletePhoto }: PhotosAppProps) {
+export default function PhotosApp({ 
+  onClose, 
+  accentClass, 
+  photos, 
+  onSetWallpaper, 
+  onDeletePhoto,
+  activeIntent,
+  onClearActiveIntent,
+  onSendIntent
+}: PhotosAppProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [statusMsg, setStatusMsg] = useState('');
 
@@ -63,13 +75,33 @@ export default function PhotosApp({ onClose, accentClass, photos, onSetWallpaper
           </div>
 
           {/* Action Footer */}
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-3 gap-2 mt-4">
             <button
               onClick={() => handleSetWallpaper(selectedPhoto.url)}
-              className="py-3 bg-zinc-900 hover:bg-zinc-800 text-xs font-mono font-bold tracking-widest uppercase border border-zinc-850 hover:border-zinc-600 flex items-center justify-center gap-2"
+              className="py-3 bg-zinc-900 hover:bg-zinc-800 text-xs font-mono font-bold tracking-widest uppercase border border-zinc-850 hover:border-zinc-600 flex flex-col sm:flex-row items-center justify-center gap-1.5"
+              title="Set as wallpaper"
             >
               <Smartphone className="w-4 h-4 text-cyan-400" />
-              Set Wallpaper
+              <span>Wallpaper</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onSendIntent?.({
+                  action: 'android.intent.action.SEND',
+                  type: 'image/jpeg',
+                  extras: {
+                    url: selectedPhoto.url,
+                    subject: 'Awesome Image from Lumia!',
+                    text: `Hey, look at this cool photo I found on my Lumia device: ${selectedPhoto.url}`
+                  }
+                });
+              }}
+              className="py-3 bg-zinc-900 hover:bg-zinc-800 text-xs font-mono font-bold tracking-widest uppercase border border-zinc-850 hover:border-zinc-600 flex flex-col sm:flex-row items-center justify-center gap-1.5"
+              title="Share photo via Outlook"
+            >
+              <Image className="w-4 h-4 text-pink-400" />
+              <span>Share</span>
             </button>
             
             <button
@@ -83,14 +115,15 @@ export default function PhotosApp({ onClose, accentClass, photos, onSetWallpaper
                   alert('Default wallpapers cannot be deleted from the system library.');
                 }
               }}
-              className={`py-3 text-xs font-mono font-bold tracking-widest uppercase border flex items-center justify-center gap-2 ${
+              className={`py-3 text-xs font-mono font-bold tracking-widest uppercase border flex flex-col sm:flex-row items-center justify-center gap-1.5 ${
                 selectedPhoto.isUserCaptured 
                   ? 'bg-red-950/20 text-red-400 border-red-900/40 hover:bg-red-900/20' 
                   : 'bg-zinc-950 text-gray-600 border-zinc-900 cursor-not-allowed'
               }`}
+              title="Delete photo"
             >
               <Trash2 className="w-4 h-4" />
-              Delete Photo
+              <span>Delete</span>
             </button>
           </div>
         </div>

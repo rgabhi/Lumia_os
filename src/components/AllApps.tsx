@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Compass, Calculator, Landmark, BookOpen, Globe, Calendar, Camera, Map, Mail, MessageSquare, Clock, ShieldAlert } from 'lucide-react';
+import { Search, Compass, Calculator, Landmark, BookOpen, Globe, Calendar, Camera, Map, Mail, MessageSquare, Clock, ShieldAlert, Cpu } from 'lucide-react';
 
 interface AllAppsProps {
   onLaunchApp: (appId: string) => void;
@@ -10,7 +10,7 @@ interface AllAppsProps {
 interface AppItem {
   id: string;
   name: string;
-  category: 'a' | 'b' | 'c' | 'm' | 's';
+  category: 'a' | 'b' | 'c' | 'i' | 'm' | 's';
   icon: React.ReactNode;
 }
 
@@ -25,6 +25,7 @@ export default function AllApps({ onLaunchApp, onNavigateHome, accentColor }: Al
     { id: 'browser', name: 'Browser Alpha', category: 'b', icon: <Globe className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'calendar', name: 'Calendar', category: 'c', icon: <Calendar className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'camera', name: 'Camera', category: 'c', icon: <Camera className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
+    { id: 'intent-router', name: 'Intent Router Shell', category: 'i', icon: <Cpu className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'browser', name: 'Maps', category: 'm', icon: <Map className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'messages', name: 'Messaging', category: 'm', icon: <MessageSquare className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'outlook', name: 'Outlook Mail', category: 'm', icon: <Mail className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },

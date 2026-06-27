@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, PhoneOff, Clock, Users, Delete, Volume2, Mic, MicOff, VolumeX } from 'lucide-react';
-import { CallLog, Contact } from '../../types';
+import { Phone, PhoneOff, Clock, Users, Delete, Volume2, Mic, MicOff, VolumeX, MessageSquare, Mail } from 'lucide-react';
+import { CallLog, Contact, Intent } from '../../types';
 import { INITIAL_CALL_LOGS, INITIAL_CONTACTS } from '../../data';
 
 interface PhoneAppProps {
   onClose: () => void;
   accentClass: string;
   onCallInitiated?: (numberOrName: string) => void;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
+  onSendIntent?: (intent: Omit<Intent, 'id' | 'timestamp'>) => void;
 }
 
-export default function PhoneApp({ onClose, accentClass }: PhoneAppProps) {
+export default function PhoneApp({ 
+  onClose, 
+  accentClass, 
+  activeIntent, 
+  onClearActiveIntent,
+  onSendIntent
+}: PhoneAppProps) {
   const [activeTab, setActiveTab] = useState<'dialer' | 'history' | 'contacts'>('dialer');
   const [dialString, setDialString] = useState('');
   const [callLogs, setCallLogs] = useState<CallLog[]>(INITIAL_CALL_LOGS);
@@ -19,6 +28,24 @@ export default function PhoneApp({ onClose, accentClass }: PhoneAppProps) {
   const [activeCall, setActiveCall] = useState<{ nameOrNumber: string; duration: number } | null>(null);
   const [speakerOn, setSpeakerOn] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
+
+  // Handle incoming intent
+  useEffect(() => {
+    if (activeIntent) {
+      if (activeIntent.action === 'android.intent.action.DIAL' || activeIntent.action === 'android.intent.action.VIEW') {
+        const url = activeIntent.data || '';
+        const telNumber = url.replace('tel:', '');
+        if (telNumber) {
+          setDialString(telNumber);
+          setActiveTab('dialer');
+          if (activeIntent.extras?.immediate) {
+            setActiveCall({ nameOrNumber: activeIntent.extras?.recipient || telNumber, duration: 0 });
+          }
+        }
+      }
+      onClearActiveIntent?.();
+    }
+  }, [activeIntent, onClearActiveIntent]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -206,13 +233,35 @@ export default function PhoneApp({ onClose, accentClass }: PhoneAppProps) {
                         <p className="text-xs text-gray-500 font-mono truncate">{contact.phone}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${
-                        contact.status === 'Available' ? 'bg-green-500' :
-                        contact.status === 'Busy' ? 'bg-red-500' :
-                        contact.status === 'Away' ? 'bg-amber-500' : 'bg-gray-500'
-                      }`} />
-                      <span className="text-xs text-gray-400 font-mono">{contact.status}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSendIntent?.({
+                            action: 'android.intent.action.SENDTO',
+                            data: `sms:${contact.phone}`,
+                            extras: { recipient: contact.name }
+                          });
+                        }}
+                        className="p-2 border border-zinc-800 hover:border-cyan-400 hover:bg-zinc-900 transition-all text-gray-400 hover:text-cyan-400"
+                        title="Send SMS"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSendIntent?.({
+                            action: 'android.intent.action.SENDTO',
+                            data: `mailto:${contact.id}@lumia.net`,
+                            extras: { recipient: contact.name, subject: "Hello" }
+                          });
+                        }}
+                        className="p-2 border border-zinc-800 hover:border-cyan-400 hover:bg-zinc-900 transition-all text-gray-400 hover:text-cyan-400"
+                        title="Send Email"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}

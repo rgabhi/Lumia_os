@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, ArrowLeft, MoreVertical } from 'lucide-react';
-import { Chat, Contact, Message } from '../../types';
+import { Send, ArrowLeft, MoreVertical, Phone } from 'lucide-react';
+import { Chat, Contact, Message, Intent } from '../../types';
 import { INITIAL_CHATS, INITIAL_CONTACTS } from '../../data';
 
 interface MessagesAppProps {
@@ -8,14 +8,63 @@ interface MessagesAppProps {
   accentClass: string;
   chats: Chat[];
   onSendMessage: (contactId: string, text: string) => void;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
+  onSendIntent?: (intent: Omit<Intent, 'id' | 'timestamp'>) => void;
 }
 
-export default function MessagesApp({ onClose, accentClass, chats, onSendMessage }: MessagesAppProps) {
+export default function MessagesApp({ 
+  onClose, 
+  accentClass, 
+  chats, 
+  onSendMessage,
+  activeIntent,
+  onClearActiveIntent,
+  onSendIntent
+}: MessagesAppProps) {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const contacts = INITIAL_CONTACTS;
+
+  // Handle incoming intent
+  useEffect(() => {
+    if (activeIntent) {
+      if (activeIntent.action === 'android.intent.action.SENDTO') {
+        const url = activeIntent.data || '';
+        const phoneOrContact = url.replace('sms:', '');
+        
+        const matchedChat = chats.find(c => {
+          const contact = contacts.find(con => con.id === c.contactId);
+          return c.contactId === phoneOrContact || contact?.phone === phoneOrContact;
+        });
+
+        if (matchedChat) {
+          setSelectedChatId(matchedChat.contactId);
+        } else if (phoneOrContact) {
+          const contact = contacts.find(c => c.phone === phoneOrContact || c.name.toLowerCase().includes(phoneOrContact.toLowerCase()));
+          if (contact) {
+            setSelectedChatId(contact.id);
+          } else {
+            setSelectedChatId(chats[0]?.contactId || null);
+          }
+        }
+
+        if (activeIntent.extras?.text) {
+          setInputText(activeIntent.extras.text);
+        }
+      } else if (activeIntent.action === 'android.intent.action.SEND') {
+        if (activeIntent.extras?.text) {
+          setInputText(activeIntent.extras.text);
+          if (!selectedChatId) {
+            setSelectedChatId(chats[0]?.contactId || null);
+          }
+        }
+      }
+      onClearActiveIntent?.();
+    }
+  }, [activeIntent, onClearActiveIntent, chats]);
 
   useEffect(() => {
     if (selectedChatId) {
@@ -121,9 +170,24 @@ export default function MessagesApp({ onClose, accentClass, chats, onSendMessage
                 </p>
               </div>
             </div>
-            <button className="p-2 hover:bg-white/5 rounded-none transition-all text-white/40 hover:text-white">
-              <MoreVertical className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => {
+                  onSendIntent?.({
+                    action: 'android.intent.action.DIAL',
+                    data: `tel:${getContactInfo(selectedChatId!).phone}`,
+                    extras: { recipient: getContactInfo(selectedChatId!).name, immediate: true }
+                  });
+                }}
+                className="p-2 border border-white/10 bg-white/5 hover:border-pink-500 hover:bg-pink-950/20 text-white/60 hover:text-pink-400 rounded-none transition-all"
+                title="Call Contact"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+              <button className="p-2 hover:bg-white/5 rounded-none transition-all text-white/40 hover:text-white">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Messages Grid */}

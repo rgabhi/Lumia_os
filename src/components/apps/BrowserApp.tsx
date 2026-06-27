@@ -1,16 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Globe, ArrowLeft, ArrowRight, RotateCw, Play, Volume2 } from 'lucide-react';
+import { Intent } from '../../types';
 
 interface BrowserAppProps {
   onClose: () => void;
   accentClass: string;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
+  onSendIntent?: (intent: Omit<Intent, 'id' | 'timestamp'>) => void;
 }
 
-export default function BrowserApp({ onClose, accentClass }: BrowserAppProps) {
+export default function BrowserApp({ 
+  onClose, 
+  accentClass,
+  activeIntent,
+  onClearActiveIntent,
+  onSendIntent
+}: BrowserAppProps) {
   const [url, setUrl] = useState('metro://news');
   const [inputUrl, setInputUrl] = useState('metro://news');
   const [history, setHistory] = useState<string[]>(['metro://news']);
   const [historyIdx, setHistoryIdx] = useState(0);
+
+  // Handle incoming intents
+  useEffect(() => {
+    if (activeIntent) {
+      if (activeIntent.action === 'android.intent.action.VIEW') {
+        const targetUrl = activeIntent.data || '';
+        if (targetUrl) {
+          navigateTo(targetUrl);
+        }
+      }
+      onClearActiveIntent?.();
+    }
+  }, [activeIntent, onClearActiveIntent]);
 
   // Snake game states
   const [snake, setSnake] = useState<{ x: number; y: number }[]>([{ x: 10, y: 10 }]);

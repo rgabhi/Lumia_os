@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipForward, SkipBack, Music, Volume2 } from 'lucide-react';
-import { Song } from '../../types';
+import { Song, Intent } from '../../types';
 import { SYSTEM_PLAYLIST } from '../../data';
 
 interface SpotifyAppProps {
@@ -14,6 +14,8 @@ interface SpotifyAppProps {
   onTogglePlay: () => void;
   playbackProgress: number;
   onProgressChange: (val: number) => void;
+  activeIntent?: Intent | null;
+  onClearActiveIntent?: () => void;
 }
 
 export default function SpotifyApp({
@@ -26,9 +28,34 @@ export default function SpotifyApp({
   onPauseSong,
   onTogglePlay,
   playbackProgress,
-  onProgressChange
+  onProgressChange,
+  activeIntent,
+  onClearActiveIntent
 }: SpotifyAppProps) {
   const songs = SYSTEM_PLAYLIST;
+
+  // Handle incoming intents
+  useEffect(() => {
+    if (activeIntent) {
+      if (activeIntent.action === 'android.intent.action.PLAY_MUSIC') {
+        const extraSongName = activeIntent.extras?.songName;
+        if (extraSongName) {
+          const matched = songs.find(s => s.title.toLowerCase().includes(extraSongName.toLowerCase()));
+          if (matched) {
+            onPlaySong(matched);
+          } else {
+            onPlaySong(songs[0]);
+          }
+        } else {
+          // If no songName extra, just play first song or toggle
+          if (!isPlaying) {
+            onPlaySong(activeSong || songs[0]);
+          }
+        }
+      }
+      onClearActiveIntent?.();
+    }
+  }, [activeIntent, onClearActiveIntent, isPlaying, activeSong, onPlaySong]);
 
   const handleNext = () => {
     const currentIndex = songs.findIndex(s => s.id === (activeSong?.id || songs[0].id));

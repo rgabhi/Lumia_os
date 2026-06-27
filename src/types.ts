@@ -71,6 +71,16 @@ export interface Song {
   notes?: number[]; // frequencies for synthesis
 }
 
+export interface Intent {
+  id: string;
+  action: string;      // e.g. "android.intent.action.VIEW", "android.intent.action.DIAL", "android.intent.action.SEND", "android.intent.action.SENDTO", "android.intent.action.PLAY_MUSIC"
+  data?: string;       // e.g. "tel:555-0199", "https://google.com", "mailto:sarah@metro.com", "geo:47.6,-122.3"
+  type?: string;       // e.g. "text/plain", "image/jpeg"
+  extras?: Record<string, any>;
+  timestamp: string;
+  resolvedApp?: string; // App that handled it
+}
+
 export type AccentColor = 'cyan' | 'magenta' | 'lime' | 'orange' | 'purple';
 
 export interface SystemSettings {

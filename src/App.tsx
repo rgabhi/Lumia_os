@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Wifi, Battery, Menu, Search, Circle, ArrowLeft, Grid } from 'lucide-react';
 import { 
-  Contact, Chat, Message, Email, CalendarEvent, Photo, CallLog, NotificationItem, Song, SystemSettings 
+  Contact, Chat, Message, Email, CalendarEvent, Photo, CallLog, NotificationItem, Song, SystemSettings, Intent
 } from './types';
 import { 
   INITIAL_CONTACTS, INITIAL_CHATS, INITIAL_EMAILS, INITIAL_EVENTS, 
@@ -26,6 +26,7 @@ import SettingsApp from './components/apps/SettingsApp';
 import PhotosApp from './components/apps/PhotosApp';
 import CameraApp from './components/apps/CameraApp';
 import BrowserApp from './components/apps/BrowserApp';
+import IntentRouterApp from './components/apps/IntentRouterApp';
 
 export default function App() {
   // --- Persistent Storage State initialization ---
@@ -71,6 +72,16 @@ export default function App() {
   const [callLogs, setCallLogs] = useState<CallLog[]>(() => {
     const saved = localStorage.getItem('metro_call_logs');
     return saved ? JSON.parse(saved) : INITIAL_CALL_LOGS;
+  });
+
+  const [intentLogs, setIntentLogs] = useState<Intent[]>(() => {
+    const saved = localStorage.getItem('metro_intent_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [activeIntent, setActiveIntent] = useState<Intent | null>(() => {
+    const saved = localStorage.getItem('metro_active_intent');
+    return saved ? JSON.parse(saved) : null;
   });
 
   // --- Spotify Web Audio Synth State ---
@@ -120,6 +131,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('metro_call_logs', JSON.stringify(callLogs));
   }, [callLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('metro_intent_logs', JSON.stringify(intentLogs));
+  }, [intentLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('metro_active_intent', JSON.stringify(activeIntent));
+  }, [activeIntent]);
 
   // --- Haptic/Click Sound Service ---
   const playHapticSound = (freq = 800, dur = 0.05, type: OscillatorType = 'sine') => {
@@ -395,8 +414,70 @@ export default function App() {
     setPhotos(INITIAL_PHOTOS);
     setNotifications(INITIAL_NOTIFICATIONS);
     setSettings(DEFAULT_SETTINGS);
+    setIntentLogs([]);
+    setActiveIntent(null);
     setIsLocked(true);
     setCurrentView('tiles');
+  };
+
+  // --- Intent Resolution Routing Engine ---
+  const handleBroadcastIntent = (intentInput: Omit<Intent, 'id' | 'timestamp'>) => {
+    playHapticSound(800, 0.1, 'triangle');
+    const newIntent: Intent = {
+      ...intentInput,
+      id: 'intent-' + Date.now(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+
+    let resolvedApp = 'browser';
+    const action = newIntent.action;
+    const data = newIntent.data || '';
+    const mime = newIntent.type || '';
+
+    if (action === 'android.intent.action.DIAL') {
+      resolvedApp = 'phone';
+    } else if (action === 'android.intent.action.SENDTO') {
+      if (data.startsWith('sms:')) {
+        resolvedApp = 'messages';
+      } else if (data.startsWith('mailto:')) {
+        resolvedApp = 'outlook';
+      } else {
+        resolvedApp = 'messages';
+      }
+    } else if (action === 'android.intent.action.SEND') {
+      if (mime.startsWith('image/')) {
+        resolvedApp = 'outlook';
+      } else {
+        resolvedApp = 'messages';
+      }
+    } else if (action === 'android.intent.action.PLAY_MUSIC') {
+      resolvedApp = 'spotify';
+    } else if (action === 'android.intent.action.VIEW') {
+      if (data.startsWith('tel:')) {
+        resolvedApp = 'phone';
+      } else if (data.startsWith('sms:')) {
+        resolvedApp = 'messages';
+      } else if (data.startsWith('mailto:')) {
+        resolvedApp = 'outlook';
+      } else if (data.startsWith('content://media/photos')) {
+        resolvedApp = 'photos';
+      } else if (data.startsWith('http:') || data.startsWith('https:') || data.startsWith('geo:') || data.startsWith('metro:')) {
+        resolvedApp = 'browser';
+      }
+    } else if (action === 'android.media.action.IMAGE_CAPTURE' || action === 'android.intent.action.IMAGE_CAPTURE') {
+      resolvedApp = 'camera';
+    } else if (action === 'custom.intent.action.LAUNCH') {
+      resolvedApp = data || 'settings';
+    }
+
+    newIntent.resolvedApp = resolvedApp;
+    setIntentLogs(prev => [newIntent, ...prev]);
+    setActiveIntent(newIntent);
+    setCurrentView(resolvedApp);
+  };
+
+  const handleClearActiveIntent = () => {
+    setActiveIntent(null);
   };
 
   // --- Actions ---
@@ -458,7 +539,15 @@ export default function App() {
     
     switch (currentView) {
       case 'phone':
-        return <PhoneApp onClose={() => setCurrentView('tiles')} accentClass={theme.bgClass} />;
+        return (
+          <PhoneApp 
+            onClose={() => setCurrentView('tiles')} 
+            accentClass={theme.bgClass} 
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
+            onSendIntent={handleBroadcastIntent}
+          />
+        );
       case 'messages':
         return (
           <MessagesApp 
@@ -466,6 +555,9 @@ export default function App() {
             accentClass={theme.bgClass} 
             chats={chats}
             onSendMessage={handleSendMessage}
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
+            onSendIntent={handleBroadcastIntent}
           />
         );
       case 'spotify':
@@ -481,6 +573,8 @@ export default function App() {
             onTogglePlay={handleTogglePlaySpotify}
             playbackProgress={playbackProgress}
             onProgressChange={handleProgressChange}
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
           />
         );
       case 'weather':
@@ -502,6 +596,9 @@ export default function App() {
             emails={emails}
             onMarkRead={handleMarkEmailRead}
             onComposeEmail={handleComposeEmail}
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
+            onSendIntent={handleBroadcastIntent}
           />
         );
       case 'settings':
@@ -522,6 +619,9 @@ export default function App() {
             photos={photos}
             onSetWallpaper={(url) => handleUpdateSettings({ lockscreenWallpaper: url })}
             onDeletePhoto={handleDeletePhoto}
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
+            onSendIntent={handleBroadcastIntent}
           />
         );
       case 'camera':
@@ -534,7 +634,25 @@ export default function App() {
           />
         );
       case 'browser':
-        return <BrowserApp onClose={() => setCurrentView('tiles')} accentClass={theme.bgClass} />;
+        return (
+          <BrowserApp 
+            onClose={() => setCurrentView('tiles')} 
+            accentClass={theme.bgClass} 
+            activeIntent={activeIntent}
+            onClearActiveIntent={handleClearActiveIntent}
+            onSendIntent={handleBroadcastIntent}
+          />
+        );
+      case 'intent-router':
+        return (
+          <IntentRouterApp 
+            onClose={() => setCurrentView('tiles')} 
+            accentClass={theme.bgClass} 
+            intentLogs={intentLogs}
+            onClearLogs={() => setIntentLogs([])}
+            onBroadcastIntent={handleBroadcastIntent}
+          />
+        );
       default:
         return null;
     }
