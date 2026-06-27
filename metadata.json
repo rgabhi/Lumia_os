@@ -1,0 +1,6 @@
+{
+  "name": "Lumina Metro OS",
+  "description": "An interactive, high-fidelity replica of a classic Metro-style mobile operating system. Features live tiles, simulated apps (Dialer, Messages, Spotify, Camera, Weather, Calendar, Mail), a lock screen, pull-down quick settings, and fully functional interactive screens.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
