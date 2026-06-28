@@ -94,9 +94,8 @@ app.post("/api/gemini/assistant", async (req, res) => {
       return res.status(400).json({ error: "Invalid request payload. Expected 'messages' array." });
     }
 
-    const ai = getGeminiClient();
-    
-    // Construct system instructions with real Lumia OS contexts
+    const lastMessage = messages[messages.length - 1]?.content || "";
+
     const statusContext = systemStatus 
       ? `\nCurrent Device Status:\n- Accent Color: ${systemStatus.accentColor}\n- Airplane Mode: ${systemStatus.airplaneMode ? 'ON' : 'OFF'}\n- Flashlight: ${systemStatus.flashlightOn ? 'ON' : 'OFF'}\n- Bluetooth: ${systemStatus.bluetoothEnabled ? 'ON' : 'OFF'}\n- Sound Effects: ${systemStatus.soundEnabled ? 'ON' : 'OFF'}\n- Wi-Fi: ${systemStatus.wifiConnected ? 'CONNECTED' : 'DISCONNECTED'}\n`
       : "";
@@ -121,27 +120,144 @@ Provide concise, friendly responses, confirming any action you've initiated.`;
       parts: [{ text: msg.content }]
     }));
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents,
-      config: {
-        systemInstruction,
-        tools: [{
-          functionDeclarations: [
-            broadcastIntentFunction,
-            changeAccentColorFunction,
-            toggleSystemSettingFunction
-          ]
-        }],
-        toolConfig: { includeServerSideToolInvocations: true }
-      }
-    });
+    // List of model aliases to try sequentially
+    const MODEL_CANDIDATES = ["gemini-2.5-flash", "gemini-2.5-pro"];
+    let responseText = "";
+    let functionCalls: any[] | null = null;
+    let apiCallSuccessful = false;
+    let lastErrorMsg = "";
 
-    const text = response.text || "";
-    const functionCalls = response.functionCalls || null;
+    const ai = getGeminiClient();
+
+    // Check if key is available
+    if (process.env.GEMINI_API_KEY) {
+      for (const modelName of MODEL_CANDIDATES) {
+        try {
+          console.log(`Attempting Cortana request using model: ${modelName}`);
+          const apiResponse = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config: {
+              systemInstruction,
+              tools: [{
+                functionDeclarations: [
+                  broadcastIntentFunction,
+                  changeAccentColorFunction,
+                  toggleSystemSettingFunction
+                ]
+              }]
+            }
+          });
+
+          responseText = apiResponse.text || "";
+          functionCalls = apiResponse.functionCalls || null;
+          apiCallSuccessful = true;
+          console.log(`Cortana request SUCCEEDED with model: ${modelName}`);
+          break; // Break loop on success
+        } catch (err: any) {
+          lastErrorMsg = err.message || String(err);
+          console.warn(`Model ${modelName} failed or busy: ${lastErrorMsg}`);
+        }
+      }
+    } else {
+      console.warn("No GEMINI_API_KEY configured. Falling back to Cortana offline protocol.");
+    }
+
+    // Elegant simulated response fallback if ALL API attempts fail (e.g. 503 high demand) or key is missing
+    if (!apiCallSuccessful) {
+      console.log("Using local offline Cortana rule-based backup parser...");
+      const normalized = lastMessage.toLowerCase();
+      responseText = "I'm running on Cortana local backup protocol. I can still help you control your Lumia device!";
+      
+      if (normalized.includes("magenta")) {
+        responseText = "Understood. I am changing your device accent color to magenta right away.";
+        functionCalls = [{ name: "changeAccentColor", args: { color: "magenta" } }];
+      } else if (normalized.includes("cyan")) {
+        responseText = "Switching your Lumia theme to cyan.";
+        functionCalls = [{ name: "changeAccentColor", args: { color: "cyan" } }];
+      } else if (normalized.includes("lime")) {
+        responseText = "Setting system accent to lime green.";
+        functionCalls = [{ name: "changeAccentColor", args: { color: "lime" } }];
+      } else if (normalized.includes("orange")) {
+        responseText = "Changing the live tiles to orange.";
+        functionCalls = [{ name: "changeAccentColor", args: { color: "orange" } }];
+      } else if (normalized.includes("purple")) {
+        responseText = "Applying purple theme to your start screen.";
+        functionCalls = [{ name: "changeAccentColor", args: { color: "purple" } }];
+      } else if (normalized.includes("flashlight")) {
+        const target = normalized.includes("off") ? false : true;
+        responseText = `Turning the flashlight ${target ? 'on' : 'off'} for you.`;
+        functionCalls = [{ name: "toggleSystemSetting", args: { setting: "flashlightOn", value: target } }];
+      } else if (normalized.includes("airplane")) {
+        const target = normalized.includes("off") || normalized.includes("disable") ? false : true;
+        responseText = `Lumia network status: turning Airplane Mode ${target ? 'on' : 'off'}.`;
+        functionCalls = [{ name: "toggleSystemSetting", args: { setting: "airplaneMode", value: target } }];
+      } else if (normalized.includes("bluetooth")) {
+        const target = normalized.includes("off") || normalized.includes("disable") ? false : true;
+        responseText = `Bluetooth is now ${target ? 'enabled' : 'disabled'}.`;
+        functionCalls = [{ name: "toggleSystemSetting", args: { setting: "bluetoothEnabled", value: target } }];
+      } else if (normalized.includes("sound")) {
+        const target = normalized.includes("off") || normalized.includes("mute") ? false : true;
+        responseText = `System sounds are now ${target ? 'on' : 'muted'}.`;
+        functionCalls = [{ name: "toggleSystemSetting", args: { setting: "soundEnabled", value: target } }];
+      } else if (normalized.includes("paint") || normalized.includes("draw")) {
+        responseText = "Opening the Paint Studio app.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://paint" } }];
+      } else if (normalized.includes("calc") || normalized.includes("math")) {
+        responseText = "Launching your Calculator.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://calculator" } }];
+      } else if (normalized.includes("weather")) {
+        responseText = "Opening the Weather app to check the forecast.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://weather" } }];
+      } else if (normalized.includes("calendar")) {
+        responseText = "Opening calendar schedules.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://calendar" } }];
+      } else if (normalized.includes("spotify") || normalized.includes("music") || normalized.includes("song")) {
+        responseText = "Starting Spotify Music.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://spotify" } }];
+      } else if (normalized.includes("setting")) {
+        responseText = "Launching System Settings panel.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://settings" } }];
+      } else if (normalized.includes("map") || normalized.includes("navigate") || normalized.includes("direction")) {
+        responseText = "Opening Lumia Maps navigation.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://maps" } }];
+      } else if (normalized.includes("game") || normalized.includes("snake") || normalized.includes("retro")) {
+        responseText = "Opening Retro Snake game hub!";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://retro-games" } }];
+      } else if (normalized.includes("message") || normalized.includes("chat") || normalized.includes("sms")) {
+        responseText = "Opening Messaging center.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://messages" } }];
+      } else if (normalized.includes("mail") || normalized.includes("email") || normalized.includes("outlook")) {
+        responseText = "Checking your Outlook mail account.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://outlook" } }];
+      } else if (normalized.includes("photo") || normalized.includes("gallery") || normalized.includes("image")) {
+        responseText = "Opening Lumia Photos Hub.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://photos" } }];
+      } else if (normalized.includes("camera") || normalized.includes("picture") || normalized.includes("photo shoot")) {
+        responseText = "Launching the Lumia Camera.";
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: "metro://camera" } }];
+      } else if (normalized.includes("phone") || normalized.includes("dial") || normalized.includes("call")) {
+        const numMatch = lastMessage.match(/\d+[\d-]*\d+/);
+        const num = numMatch ? numMatch[0] : "555-0199";
+        responseText = `Initiating dialer request for ${num}...`;
+        functionCalls = [{ name: "broadcastIntent", args: { action: "android.intent.action.VIEW", data: `tel:${num}` } }];
+      } else {
+        if (normalized.includes("hello") || normalized.includes("hi") || normalized.includes("hey")) {
+          responseText = "Hello! I'm here. Although my neural cloud connection is busy, my local core is fully operational! Ask me to change themes, toggle flashlight, or open any apps.";
+        } else if (normalized.includes("who are you") || normalized.includes("your name")) {
+          responseText = "I am Cortana, your intelligent companion on this Lumia OS. Currently running in offline protocol mode.";
+        } else if (normalized.includes("thank")) {
+          responseText = "You're very welcome! Let me know if you need anything else on your Lumia.";
+        } else if (normalized.includes("weather")) {
+          responseText = "The weather seems bright and clear today on local sensors! Check out the weather app tile for full live details.";
+        } else {
+          responseText = `Cortana Core: I received "${lastMessage}". (Currently running offline fallback). Try: 'change theme to magenta', 'turn on flashlight', or 'open Paint'.`;
+        }
+      }
+    }
 
     res.json({
-      text,
+      text: responseText,
       functionCalls
     });
   } catch (err: any) {
