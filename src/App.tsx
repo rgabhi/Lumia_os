@@ -27,6 +27,7 @@ import PhotosApp from './components/apps/PhotosApp';
 import CameraApp from './components/apps/CameraApp';
 import BrowserApp from './components/apps/BrowserApp';
 import IntentRouterApp from './components/apps/IntentRouterApp';
+import GeminiAssistantApp from './components/apps/GeminiAssistantApp';
 
 export default function App() {
   // --- Persistent Storage State initialization ---
@@ -784,6 +785,17 @@ export default function App() {
             intentLogs={intentLogs}
             onClearLogs={() => setIntentLogs([])}
             onBroadcastIntent={handleBroadcastIntent}
+          />
+        );
+      case 'cortana':
+        return (
+          <GeminiAssistantApp 
+            onClose={() => setCurrentView('tiles')} 
+            accentClass={theme.bgClass} 
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            onBroadcastIntent={handleBroadcastIntent}
+            playHapticSound={playHapticSound}
           />
         );
       default:

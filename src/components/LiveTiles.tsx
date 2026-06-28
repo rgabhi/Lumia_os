@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Phone, MessageSquare, Users, Music, Calendar, Sun, Mail, ShoppingBag, 
-  Settings, Play, Pause, X, ChevronLeft, ChevronRight, Maximize2, Plus, Check, Pin, PinOff
+  Settings, Play, Pause, X, ChevronLeft, ChevronRight, Maximize2, Plus, Check, Pin, PinOff, Sparkles
 } from 'lucide-react';
 import { Song, SystemSettings, CalendarEvent, TileConfig } from '../types';
 
@@ -653,6 +653,49 @@ export default function LiveTiles({
                   );
                 }
 
+              case 'cortana':
+                if (tile.size === 'small') {
+                  return (
+                    <div className="h-full w-full flex items-center justify-center bg-zinc-950 text-cyan-400 relative">
+                      <Sparkles className="w-5 h-5 animate-pulse" />
+                    </div>
+                  );
+                } else if (tile.size === 'medium') {
+                  return (
+                    <div className="h-full w-full flex flex-col justify-between p-4 bg-zinc-950 text-white relative overflow-hidden">
+                      <div className="absolute top-4 right-4 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full border-2 border-cyan-400 animate-ping absolute opacity-40" />
+                        <div className="w-8 h-8 rounded-full border border-cyan-400 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 bg-cyan-400 rounded-full animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-0.5 mt-2">
+                        <span className="text-[10px] font-mono tracking-wider text-cyan-400">GEMINI POWERED</span>
+                        <span className="text-sm font-bold tracking-tight">Cortana AI</span>
+                      </div>
+                      <span className="text-[9px] text-white/50 tracking-wide uppercase font-mono">Hey Cortana</span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="h-full w-full flex items-center justify-between p-4 bg-zinc-950 text-white border-l-4 border-cyan-500 overflow-hidden">
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-12 h-12 flex items-center justify-center flex-shrink-0">
+                          <div className="absolute inset-0 rounded-full border border-cyan-400/20 animate-pulse" />
+                          <div className="w-10 h-10 rounded-full border border-double border-cyan-400 flex items-center justify-center">
+                            <div className="w-3.5 h-3.5 bg-cyan-400 rounded-full animate-pulse" />
+                          </div>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-mono text-cyan-400 tracking-wider">INTELLIGENT COMPANION</span>
+                          <span className="text-sm font-bold uppercase tracking-tight">Cortana Assistant</span>
+                          <span className="text-[10px] text-white/60 font-medium">"Ask me to change system settings or play music"</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
               case 'settings':
                 if (tile.size === 'small') {
                   return (
@@ -703,7 +746,7 @@ export default function LiveTiles({
               onMouseLeave={() => handleMouseUpOrLeave(tile.id)}
               style={getTiltStyle(tile.id)}
               className={`relative cursor-pointer transition-all duration-200 select-none overflow-hidden rounded-none shadow-md ${sizeClass} ${
-                tile.id === 'spotify' ? 'bg-[#1DB954]' : tile.id === 'weather' || tile.id === 'settings' ? 'bg-zinc-900' : getAccentBg()
+                tile.id === 'spotify' ? 'bg-[#1DB954]' : tile.id === 'weather' || tile.id === 'settings' || tile.id === 'cortana' ? 'bg-zinc-950' : getAccentBg()
               } ${isEditMode ? 'ring-2 ring-white/50 scale-[0.98]' : 'hover:brightness-105'}`}
             >
               {/* Actual custom Tile UI */}

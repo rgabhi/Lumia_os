@@ -272,10 +272,11 @@ export const DEFAULT_TILES = [
   { id: 'people', name: 'People', appId: 'phone', size: 'wide', order: 3, visible: true },
   { id: 'photos', name: 'Photos', appId: 'photos', size: 'wide', order: 4, visible: true },
   { id: 'spotify', name: 'Spotify', appId: 'spotify', size: 'medium', order: 5, visible: true },
-  { id: 'calendar', name: 'Calendar', appId: 'calendar', size: 'small', order: 6, visible: true },
-  { id: 'weather', name: 'Weather', appId: 'weather', size: 'small', order: 7, visible: true },
-  { id: 'outlook', name: 'Outlook', appId: 'outlook', size: 'medium', order: 8, visible: true },
-  { id: 'browser', name: 'Store', appId: 'browser', size: 'small', order: 9, visible: true },
-  { id: 'settings', name: 'Settings', appId: 'settings', size: 'small', order: 10, visible: true }
+  { id: 'cortana', name: 'Cortana', appId: 'cortana', size: 'medium', order: 6, visible: true },
+  { id: 'calendar', name: 'Calendar', appId: 'calendar', size: 'small', order: 7, visible: true },
+  { id: 'weather', name: 'Weather', appId: 'weather', size: 'small', order: 8, visible: true },
+  { id: 'outlook', name: 'Outlook', appId: 'outlook', size: 'medium', order: 9, visible: true },
+  { id: 'browser', name: 'Store', appId: 'browser', size: 'small', order: 10, visible: true },
+  { id: 'settings', name: 'Settings', appId: 'settings', size: 'small', order: 11, visible: true }
 ];
 
