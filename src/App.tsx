@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Wifi, Battery, Menu, Search, Circle, ArrowLeft, Grid } from 'lucide-react';
+import { Wifi, Battery, Menu, Search, Circle, ArrowLeft, Grid, MessageSquare, Mail, Calendar, ShieldAlert } from 'lucide-react';
 import { 
-  Contact, Chat, Message, Email, CalendarEvent, Photo, CallLog, NotificationItem, Song, SystemSettings, Intent
+  Contact, Chat, Message, Email, CalendarEvent, Photo, CallLog, NotificationItem, Song, SystemSettings, Intent, TileConfig
 } from './types';
 import { 
   INITIAL_CONTACTS, INITIAL_CHATS, INITIAL_EMAILS, INITIAL_EVENTS, 
   INITIAL_PHOTOS, INITIAL_CALL_LOGS, INITIAL_NOTIFICATIONS, 
-  SYSTEM_PLAYLIST, DEFAULT_SETTINGS, METRO_THEMES 
+  SYSTEM_PLAYLIST, DEFAULT_SETTINGS, METRO_THEMES, DEFAULT_TILES 
 } from './data';
 
 // Component Imports
@@ -69,6 +69,21 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
   });
 
+  const [activeToast, setActiveToast] = useState<NotificationItem | null>(null);
+
+  const [notificationRules, setNotificationRules] = useState(() => {
+    const saved = localStorage.getItem('metro_notif_rules');
+    return saved ? JSON.parse(saved) : {
+      dndMode: false,
+      channels: {
+        MESSAGES: { sound: true, toast: true, priority: 'Normal' },
+        CALENDAR: { sound: true, toast: true, priority: 'Normal' },
+        SYSTEM: { sound: true, toast: true, priority: 'High' },
+        OUTLOOK: { sound: true, toast: true, priority: 'Normal' }
+      }
+    };
+  });
+
   const [callLogs, setCallLogs] = useState<CallLog[]>(() => {
     const saved = localStorage.getItem('metro_call_logs');
     return saved ? JSON.parse(saved) : INITIAL_CALL_LOGS;
@@ -83,6 +98,13 @@ export default function App() {
     const saved = localStorage.getItem('metro_active_intent');
     return saved ? JSON.parse(saved) : null;
   });
+
+  const [tiles, setTiles] = useState<TileConfig[]>(() => {
+    const saved = localStorage.getItem('metro_live_tiles');
+    return saved ? JSON.parse(saved) : DEFAULT_TILES;
+  });
+
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // --- Spotify Web Audio Synth State ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -129,6 +151,10 @@ export default function App() {
   }, [notifications]);
 
   useEffect(() => {
+    localStorage.setItem('metro_notif_rules', JSON.stringify(notificationRules));
+  }, [notificationRules]);
+
+  useEffect(() => {
     localStorage.setItem('metro_call_logs', JSON.stringify(callLogs));
   }, [callLogs]);
 
@@ -139,6 +165,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('metro_active_intent', JSON.stringify(activeIntent));
   }, [activeIntent]);
+
+  useEffect(() => {
+    localStorage.setItem('metro_live_tiles', JSON.stringify(tiles));
+  }, [tiles]);
 
   // --- Haptic/Click Sound Service ---
   const playHapticSound = (freq = 800, dur = 0.05, type: OscillatorType = 'sine') => {
@@ -319,19 +349,18 @@ export default function App() {
         return chat;
       }));
 
-      // Add to notifications
-      const newNotif: NotificationItem = {
-        id: 'notif-' + Date.now(),
+      // Add to notifications with inter-app intent action
+      addNotification({
         title: contactName,
         text: replyText,
-        timestamp: 'Just now',
         appName: 'MESSAGES',
-        sender: contactName
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-
-      // Play message received sound
-      playHapticSound(520, 0.25, 'triangle');
+        sender: contactName,
+        intent: {
+          action: 'android.intent.action.SENDTO',
+          data: `sms:${contactId}`,
+          extras: { recipient: contactName }
+        }
+      });
 
     }, 2000);
   };
@@ -359,15 +388,17 @@ export default function App() {
     };
     setEmails(prev => [newEmail, ...prev]);
 
-    // Also add to notifications
-    const newNotif: NotificationItem = {
-      id: 'notif-email-' + Date.now(),
+    // Also add to notifications using unified listener engine
+    addNotification({
       title: recipient,
       text: subject,
-      timestamp: 'Just now',
-      appName: 'OUTLOOK'
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+      appName: 'OUTLOOK',
+      intent: {
+        action: 'android.intent.action.SENDTO',
+        data: `mailto:${recipient.toLowerCase().replace(/\s+/g, '')}@lumia.net`,
+        extras: { recipient, subject }
+      }
+    });
   };
 
   // --- Calendar Event schedules ---
@@ -379,15 +410,16 @@ export default function App() {
     };
     setEvents(prev => [...prev, event]);
 
-    // Add to notifications
-    const newNotif: NotificationItem = {
-      id: 'notif-event-' + Date.now(),
+    // Add to notifications using unified listener engine
+    addNotification({
       title: 'Calendar Scheduled',
       text: `${event.title} at ${event.time}`,
-      timestamp: 'Just now',
-      appName: 'CALENDAR'
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+      appName: 'CALENDAR',
+      intent: {
+        action: 'custom.intent.action.LAUNCH',
+        data: 'calendar'
+      }
+    });
   };
 
   // --- Camera Roll photos ---
@@ -480,6 +512,83 @@ export default function App() {
     setActiveIntent(null);
   };
 
+  const addNotification = (notifInput: Omit<NotificationItem, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => {
+    const channel = notifInput.appName;
+    const rules = notificationRules.channels[channel] || { sound: true, toast: true, priority: 'Normal' };
+
+    const newNotif: NotificationItem = {
+      id: notifInput.id || 'notif-' + Date.now(),
+      title: notifInput.title,
+      text: notifInput.text,
+      timestamp: notifInput.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      appName: channel,
+      sender: notifInput.sender,
+      intent: notifInput.intent
+    };
+
+    setNotifications(prev => [newNotif, ...prev]);
+
+    // Respect Do Not Disturb rules unless High Priority
+    if (notificationRules.dndMode && rules.priority !== 'High') {
+      return;
+    }
+
+    // Play specific sound frequencies per channel for authentic device feel
+    if (rules.sound && settings.soundEnabled) {
+      if (channel === 'MESSAGES') {
+        playHapticSound(520, 0.2, 'triangle');
+      } else if (channel === 'SYSTEM') {
+        playHapticSound(720, 0.25, 'sine');
+      } else if (channel === 'CALENDAR') {
+        playHapticSound(640, 0.15, 'sawtooth');
+      } else if (channel === 'OUTLOOK') {
+        playHapticSound(480, 0.15, 'sine');
+      } else {
+        playHapticSound(600, 0.1, 'sine');
+      }
+    }
+
+    // Display sliding toast if allowed
+    if (rules.toast) {
+      setActiveToast(newNotif);
+    }
+  };
+
+  const handleDeleteNotification = (id: string) => {
+    playHapticSound(400, 0.05);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleNotificationClick = (notif: NotificationItem) => {
+    playHapticSound(800, 0.08, 'sine');
+    if (notif.intent) {
+      handleBroadcastIntent(notif.intent);
+    } else {
+      // Fallback: route to its logical app
+      if (notif.appName === 'MESSAGES') {
+        setCurrentView('messages');
+      } else if (notif.appName === 'OUTLOOK') {
+        setCurrentView('outlook');
+      } else if (notif.appName === 'CALENDAR') {
+        setCurrentView('calendar');
+      } else {
+        setCurrentView('settings');
+      }
+    }
+    // Windows Phone style: delete upon tapping
+    setNotifications(prev => prev.filter(n => n.id !== notif.id));
+  };
+
+  // Auto-dismiss active toast banner after a short duration
+  useEffect(() => {
+    if (activeToast) {
+      const timer = setTimeout(() => {
+        setActiveToast(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeToast]);
+
   // --- Actions ---
   const handleClearNotifications = () => {
     playHapticSound(450, 0.1);
@@ -530,6 +639,25 @@ export default function App() {
     if (appId === 'messages') {
       setChats(prev => prev.map(c => ({ ...c, unreadCount: 0 })));
     }
+    
+    // Redirect web-based store apps via intent view
+    if (appId === 'paint') {
+      handleBroadcastIntent({ action: 'android.intent.action.VIEW', data: 'metro://paint' });
+      return;
+    }
+    if (appId === 'calculator') {
+      handleBroadcastIntent({ action: 'android.intent.action.VIEW', data: 'metro://calculator' });
+      return;
+    }
+    if (appId === 'maps') {
+      handleBroadcastIntent({ action: 'android.intent.action.VIEW', data: 'metro://maps' });
+      return;
+    }
+    if (appId === 'retro-games') {
+      handleBroadcastIntent({ action: 'android.intent.action.VIEW', data: 'metro://retro-games' });
+      return;
+    }
+
     setCurrentView(appId);
   };
 
@@ -641,6 +769,11 @@ export default function App() {
             activeIntent={activeIntent}
             onClearActiveIntent={handleClearActiveIntent}
             onSendIntent={handleBroadcastIntent}
+            tiles={tiles}
+            onUpdateTiles={setTiles}
+            playHapticSound={playHapticSound}
+            settings={settings}
+            onCapturePhoto={handleCapturePhoto}
           />
         );
       case 'intent-router':
@@ -686,6 +819,10 @@ export default function App() {
           0% { transform: translateY(24px); opacity: 0; }
           100% { transform: translateY(0); opacity: 1; }
         }
+        @keyframes slideDown {
+          0% { transform: translateY(-30px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
         .no-scrollbar::-webkit-scrollbar {
           display: none;
         }
@@ -729,7 +866,48 @@ export default function App() {
               notifications={notifications}
               onClearNotifications={handleClearNotifications}
               onClose={() => setCurrentView('tiles')}
+              notificationRules={notificationRules}
+              onUpdateNotificationRules={setNotificationRules}
+              onAddNotification={addNotification}
+              onDeleteNotification={handleDeleteNotification}
+              onNotificationClick={handleNotificationClick}
+              onBroadcastIntent={handleBroadcastIntent}
             />
+          )}
+
+          {/* 3. DYNAMIC TOAST BANNER (Z-INDEX 50 overlay) */}
+          {!isLocked && activeToast && currentView !== 'action-center' && (
+            <div 
+              onClick={() => {
+                handleNotificationClick(activeToast);
+                setActiveToast(null);
+              }}
+              className="absolute top-14 inset-x-3 bg-zinc-900 border-l-4 shadow-[0_15px_30px_rgba(0,0,0,0.85)] p-3 z-50 flex items-center justify-between cursor-pointer animate-[slideDown_0.22s_ease-out] hover:bg-zinc-850"
+              style={{ borderLeftColor: themeAccent.hex }}
+            >
+              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-white" style={{ backgroundColor: themeAccent.hex }}>
+                  {activeToast.appName === 'MESSAGES' && <MessageSquare className="w-4 h-4" />}
+                  {activeToast.appName === 'OUTLOOK' && <Mail className="w-4 h-4" />}
+                  {activeToast.appName === 'CALENDAR' && <Calendar className="w-4 h-4" />}
+                  {activeToast.appName === 'SYSTEM' && <ShieldAlert className="w-4 h-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-black text-white/40 tracking-widest uppercase mb-0.5 leading-none">{activeToast.appName}</p>
+                  <p className="text-xs font-bold text-white truncate leading-none mb-1">{activeToast.title}</p>
+                  <p className="text-xs text-white/70 truncate leading-tight">{activeToast.text}</p>
+                </div>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveToast(null);
+                }}
+                className="p-2 text-white/30 hover:text-white hover:bg-white/5 transition-colors self-start ml-2"
+              >
+                <span className="text-xs font-bold font-sans">✕</span>
+              </button>
+            </div>
           )}
 
           {/* --- ACTIVE SYSTEM BAR / STATUS HEADER --- */}
@@ -818,6 +996,11 @@ export default function App() {
                   isPlaying={isPlaying}
                   onLaunchApp={handleLaunchApp}
                   onTogglePlaySpotify={handleTogglePlaySpotify}
+                  tiles={tiles}
+                  onUpdateTiles={setTiles}
+                  isEditMode={isEditMode}
+                  onSetEditMode={setIsEditMode}
+                  playHapticSound={playHapticSound}
                 />
               </div>
             )}
@@ -851,6 +1034,7 @@ export default function App() {
                   onLaunchApp={handleLaunchApp} 
                   onNavigateHome={() => setCurrentView('tiles')} 
                   accentColor={themeAccent.accentHex}
+                  tiles={tiles}
                 />
               </div>
             )}

@@ -61,6 +61,7 @@ export interface NotificationItem {
   timestamp: string;
   appName: 'MESSAGES' | 'CALENDAR' | 'SYSTEM' | 'OUTLOOK';
   sender?: string;
+  intent?: Omit<Intent, 'id' | 'timestamp'>;
 }
 
 export interface Song {
@@ -93,3 +94,13 @@ export interface SystemSettings {
   flashlightOn: boolean;
   wifiConnected: boolean;
 }
+
+export interface TileConfig {
+  id: string;
+  name: string;
+  appId: string;
+  size: 'small' | 'medium' | 'wide';
+  order: number;
+  visible: boolean;
+}
+

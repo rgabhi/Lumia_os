@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
-import { Search, Compass, Calculator, Landmark, BookOpen, Globe, Calendar, Camera, Map, Mail, MessageSquare, Clock, ShieldAlert, Cpu } from 'lucide-react';
+import { Search, Compass, Calculator, Landmark, BookOpen, Globe, Calendar, Camera, Map, Mail, MessageSquare, Clock, ShieldAlert, Cpu, Palette } from 'lucide-react';
 
 interface AllAppsProps {
   onLaunchApp: (appId: string) => void;
   onNavigateHome: () => void;
   accentColor: string;
+  tiles?: { id: string; name: string; appId: string; visible: boolean }[];
 }
 
 interface AppItem {
   id: string;
   name: string;
-  category: 'a' | 'b' | 'c' | 'i' | 'm' | 's';
+  category: string;
   icon: React.ReactNode;
 }
 
-export default function AllApps({ onLaunchApp, onNavigateHome, accentColor }: AllAppsProps) {
+export default function AllApps({ onLaunchApp, onNavigateHome, accentColor, tiles = [] }: AllAppsProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const APPS_LIST: AppItem[] = [
@@ -31,6 +32,25 @@ export default function AllApps({ onLaunchApp, onNavigateHome, accentColor }: Al
     { id: 'outlook', name: 'Outlook Mail', category: 'm', icon: <Mail className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> },
     { id: 'settings', name: 'System Settings', category: 's', icon: <ShieldAlert className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> }
   ];
+
+  // Dynamically inject custom apps installed from the App Store
+  const hasPaint = tiles.some(t => t.id === 'paint');
+  const hasCalc = tiles.some(t => t.id === 'calculator');
+  const hasMaps = tiles.some(t => t.id === 'maps');
+  const hasSnake = tiles.some(t => t.id === 'retro-games');
+
+  if (hasPaint) {
+    APPS_LIST.push({ id: 'paint', name: 'Metro Paint Studio', category: 'p', icon: <Palette className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> });
+  }
+  if (hasCalc) {
+    APPS_LIST.push({ id: 'calculator', name: 'Tile Calculator Pro', category: 'c', icon: <Calculator className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> });
+  }
+  if (hasMaps) {
+    APPS_LIST.push({ id: 'maps', name: 'Lumia Vector Maps', category: 'l', icon: <Map className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> });
+  }
+  if (hasSnake) {
+    APPS_LIST.push({ id: 'retro-games', name: 'Snake Arcade HD', category: 's', icon: <Compass className="w-5 h-5 text-white/80 group-hover:text-cyan-400 transition-colors" /> });
+  }
 
   const filteredApps = APPS_LIST.filter(app => 
     app.name.toLowerCase().includes(searchQuery.toLowerCase())
