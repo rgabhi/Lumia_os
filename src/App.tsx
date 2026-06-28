@@ -28,6 +28,7 @@ import CameraApp from './components/apps/CameraApp';
 import BrowserApp from './components/apps/BrowserApp';
 import IntentRouterApp from './components/apps/IntentRouterApp';
 import GeminiAssistantApp from './components/apps/GeminiAssistantApp';
+import HalKernelApp from './components/apps/HalKernelApp';
 
 export default function App() {
   // --- Persistent Storage State initialization ---
@@ -795,6 +796,16 @@ export default function App() {
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
             onBroadcastIntent={handleBroadcastIntent}
+            playHapticSound={playHapticSound}
+          />
+        );
+      case 'hal-kernel':
+        return (
+          <HalKernelApp 
+            onClose={() => setCurrentView('tiles')} 
+            accentClass={theme.bgClass} 
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
             playHapticSound={playHapticSound}
           />
         );
