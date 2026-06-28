@@ -35,7 +35,7 @@ export default function HalKernelApp({
   onUpdateSettings,
   playHapticSound
 }: HalKernelAppProps) {
-  const [activeTab, setActiveTab] = useState<'walkthrough' | 'hal-controllers' | 'kernel-logs' | 'sysfs'>('hal-controllers');
+  const [activeTab, setActiveTab] = useState<'walkthrough' | 'hal-controllers' | 'kernel-logs' | 'sysfs' | 'aosp-code'>('aosp-code');
   
   // HAL state models
   const [flashlightIntensity, setFlashlightIntensity] = useState(settings.flashlightOn ? 255 : 0);
@@ -59,6 +59,14 @@ export default function HalKernelApp({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+
+  // AOSP Compiler / DevSuite States
+  const [selectedCodeFile, setSelectedCodeFile] = useState<'kotlin-launcher' | 'rust-lights' | 'rust-audio' | 'board-config'>('kotlin-launcher');
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [compilationProgress, setCompilationProgress] = useState(0);
+  const [compileLogs, setCompileLogs] = useState<string[]>([]);
+  const [compileSuccess, setCompileSuccess] = useState(false);
+  const compileTerminalEndRef = useRef<HTMLDivElement>(null);
 
   const activeTheme = METRO_THEMES[settings.accentColor] || METRO_THEMES.cyan;
 
@@ -217,6 +225,67 @@ export default function HalKernelApp({
       }
     };
   }, []);
+
+  // Auto-scroll compiler logs terminal
+  useEffect(() => {
+    if (compileTerminalEndRef.current) {
+      compileTerminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [compileLogs]);
+
+  // Simulate Android AOSP ROM build compilation pipeline
+  const runAospROMCompilation = () => {
+    if (isCompiling) return;
+    
+    setIsCompiling(true);
+    setCompilationProgress(0);
+    setCompileSuccess(false);
+    setCompileLogs([]);
+
+    const steps = [
+      { log: "Initializing Lumia MSM8992 AOSP Environment...", progress: 5, delay: 350 },
+      { log: "$ source build/envsetup.sh && lunch lumia_msm8992-userdebug", progress: 12, delay: 450 },
+      { log: "Checking host build toolchains: clang v12.0.5, rustc v1.65.0, gradle v8.2...", progress: 20, delay: 400 },
+      { log: "[1/6] Building low-level lights HAL service in Rust...", progress: 30, delay: 550 },
+      { log: "  cargo build --manifest-path=/aosp_src/hal/lights_hal/Cargo.toml --target=aarch64-linux-android --release", progress: 38, delay: 350 },
+      { log: "  Compiling core registers mapping modules...", progress: 42, delay: 250 },
+      { log: "  Finished lights.primary.lumia HAL binary [target/aarch64-linux-android/release/lights.primary.lumia]", progress: 48, delay: 350 },
+      { log: "[2/6] Building primary audio HAL codec driver interface in Rust...", progress: 54, delay: 500 },
+      { log: "  Compiling audio_hal/src/main.rs using rust-android target links...", progress: 58, delay: 300 },
+      { log: "  Finished audio.primary.lumia HAL subsystem C-bindings successfully.", progress: 64, delay: 350 },
+      { log: "[3/6] Building Jetpack Compose Lumia SystemUI & Launcher (Kotlin)...", progress: 70, delay: 650 },
+      { log: "  ./gradlew :app:assembleRelease --project-dir=/aosp_src/launcher", progress: 74, delay: 450 },
+      { log: "  Applying theme alignments (Lumia Cyan/Magenta/Lime)...", progress: 78, delay: 250 },
+      { log: "  Finished building system application: com.nokia.lumia.launcher.apk", progress: 82, delay: 350 },
+      { log: "[4/6] Parsing BoardConfig.mk and compiling system image partitions...", progress: 88, delay: 550 },
+      { log: "  Creating boot.img, system.img, and vendor.img system partition offsets...", progress: 92, delay: 450 },
+      { log: "[5/6] Bundling AOSP target OTA files list into Lumia_MSM8992_OTA.zip...", progress: 96, delay: 500 },
+      { log: "[6/6] Build finished! Flashable Android ROM ZIP generated.", progress: 100, delay: 300 }
+    ];
+
+    let currentStep = 0;
+    
+    const executeStep = () => {
+      if (currentStep < steps.length) {
+        const step = steps[currentStep];
+        setCompileLogs(prev => [...prev, `[BUILD] ${step.log}`]);
+        setCompilationProgress(step.progress);
+        
+        if (playHapticSound) {
+          playHapticSound(500 + step.progress * 3, 0.02, 'sine');
+        }
+
+        currentStep++;
+        setTimeout(executeStep, step.delay);
+      } else {
+        setIsCompiling(false);
+        setCompileSuccess(true);
+        if (playHapticSound) playHapticSound(880, 0.15, 'sine');
+      }
+    };
+
+    executeStep();
+  };
 
   // Flashlight sysfs slider manipulation
   const handleFlashlightIntensityChange = (val: number) => {
@@ -383,6 +452,19 @@ export default function HalKernelApp({
       <div className="flex gap-1 overflow-x-auto pb-1 mb-4 no-scrollbar border-b border-zinc-900 shrink-0 rounded-none">
         <button
           onClick={() => {
+            setActiveTab('aosp-code');
+            if (playHapticSound) playHapticSound(600, 0.03, 'sine');
+          }}
+          className={`px-4 py-2 text-xs font-mono tracking-wider uppercase transition-all rounded-none whitespace-nowrap ${
+            activeTab === 'aosp-code' 
+              ? `${activeTheme.bgClass} text-white font-bold` 
+              : 'bg-zinc-950 hover:bg-zinc-900 text-gray-400'
+          }`}
+        >
+          AOSP KOTLIN / RUST WORKSPACE
+        </button>
+        <button
+          onClick={() => {
             setActiveTab('hal-controllers');
             if (playHapticSound) playHapticSound(600, 0.03, 'sine');
           }}
@@ -436,8 +518,402 @@ export default function HalKernelApp({
       </div>
 
       {/* Main Body Panel */}
-      <div className="flex-1 min-h-0 bg-zinc-950 border border-zinc-900 p-4 relative rounded-none">
+      <div className="flex-1 min-h-0 bg-zinc-950 border border-zinc-900 p-4 relative rounded-none flex flex-col justify-between">
         
+        {/* VIEW 0: AOSP Kotlin / Rust ROM DevSuite Workspace */}
+        {activeTab === 'aosp-code' && (
+          <div className="h-full flex flex-col lg:flex-row gap-4 min-h-0 rounded-none overflow-hidden">
+            
+            {/* Left Side: ROM Compiler Console & File tree */}
+            <div className="lg:w-2/5 flex flex-col justify-between gap-4 shrink-0 min-h-0 rounded-none">
+              
+              {/* Box A: Project Structure Files tree */}
+              <div className="bg-black border border-zinc-900 p-4 rounded-none flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between border-b border-zinc-900 pb-2 mb-3 rounded-none">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase">AOSP ROM Workspace Tree</span>
+                    <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-2 py-0.5 border border-cyan-900/50 rounded-none">SOURCE IN SYNC</span>
+                  </div>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                    Inspect the authentic system-level source files residing in your workspace under <code className="text-white">/aosp_src/</code>. These can be compiled here and exported directly to physical hardware!
+                  </p>
+
+                  <div className="space-y-1 rounded-none font-mono text-xs">
+                    <button
+                      onClick={() => {
+                        setSelectedCodeFile('kotlin-launcher');
+                        if (playHapticSound) playHapticSound(500, 0.02, 'sine');
+                      }}
+                      className={`w-full text-left p-2.5 flex items-center gap-2.5 transition-colors border rounded-none ${
+                        selectedCodeFile === 'kotlin-launcher'
+                          ? `${activeTheme.borderClass} bg-zinc-900 text-white font-bold`
+                          : 'border-zinc-900 hover:bg-zinc-950 text-zinc-400'
+                      }`}
+                    >
+                      <Layers className="w-4 h-4 text-purple-400" />
+                      <div className="truncate rounded-none">
+                        <span className="text-[9px] text-zinc-600 block leading-none">JETPACK COMPOSE UI</span>
+                        <span>launcher/MainActivity.kt</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedCodeFile('rust-lights');
+                        if (playHapticSound) playHapticSound(500, 0.02, 'sine');
+                      }}
+                      className={`w-full text-left p-2.5 flex items-center gap-2.5 transition-colors border rounded-none ${
+                        selectedCodeFile === 'rust-lights'
+                          ? `${activeTheme.borderClass} bg-zinc-900 text-white font-bold`
+                          : 'border-zinc-900 hover:bg-zinc-950 text-zinc-400'
+                      }`}
+                    >
+                      <Cpu className="w-4 h-4 text-orange-400" />
+                      <div className="truncate rounded-none">
+                        <span className="text-[9px] text-zinc-600 block leading-none">RUST BINDER HAL</span>
+                        <span>hal/lights_hal/src/main.rs</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedCodeFile('rust-audio');
+                        if (playHapticSound) playHapticSound(500, 0.02, 'sine');
+                      }}
+                      className={`w-full text-left p-2.5 flex items-center gap-2.5 transition-colors border rounded-none ${
+                        selectedCodeFile === 'rust-audio'
+                          ? `${activeTheme.borderClass} bg-zinc-900 text-white font-bold`
+                          : 'border-zinc-900 hover:bg-zinc-950 text-zinc-400'
+                      }`}
+                    >
+                      <Volume2 className="w-4 h-4 text-blue-400" />
+                      <div className="truncate rounded-none">
+                        <span className="text-[9px] text-zinc-600 block leading-none">RUST ALSA STREAMER</span>
+                        <span>hal/audio_hal/src/main.rs</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedCodeFile('board-config');
+                        if (playHapticSound) playHapticSound(500, 0.02, 'sine');
+                      }}
+                      className={`w-full text-left p-2.5 flex items-center gap-2.5 transition-colors border rounded-none ${
+                        selectedCodeFile === 'board-config'
+                          ? `${activeTheme.borderClass} bg-zinc-900 text-white font-bold`
+                          : 'border-zinc-900 hover:bg-zinc-950 text-zinc-400'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4 text-cyan-400" />
+                      <div className="truncate rounded-none">
+                        <span className="text-[9px] text-zinc-600 block leading-none">AOSP SNAPDRAGON CONFIG</span>
+                        <span>device/BoardConfig.mk</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-zinc-900 text-[9px] text-zinc-500 font-sans leading-relaxed">
+                  Export this entire Workspace workspace via the <strong className="text-zinc-400">Settings</strong> menu to get these exact source files as a flashable build skeleton!
+                </div>
+              </div>
+
+              {/* Box B: Simulated AOSP Compilation Engine Terminal */}
+              <div className="bg-black border border-zinc-900 p-4 rounded-none flex-1 min-h-0 flex flex-col justify-between">
+                <div className="flex-1 min-h-0 flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-zinc-900 pb-2 mb-3 shrink-0 rounded-none">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase">AOSP OTA Build Engine</span>
+                    <span className="animate-pulse text-[9px] font-mono text-green-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" /> COMPILER IDLE</span>
+                  </div>
+
+                  {/* Terminal stdout logs */}
+                  <div className="flex-1 overflow-y-auto no-scrollbar bg-zinc-950 p-2.5 border border-zinc-900 text-[10px] font-mono leading-relaxed space-y-1 mb-3 min-h-[140px] max-h-[180px] rounded-none">
+                    {compileLogs.length === 0 ? (
+                      <div className="text-zinc-600 text-center py-12 select-none">
+                        No active compilation. Click the build button below to start compiling your Rust &amp; Compose ROM target!
+                      </div>
+                    ) : (
+                      compileLogs.map((log, idx) => (
+                        <div key={idx} className="text-zinc-300 animate-fadeIn">
+                          {log}
+                        </div>
+                      ))
+                    )}
+                    <div ref={compileTerminalEndRef} />
+                  </div>
+                </div>
+
+                <div className="space-y-3 shrink-0 rounded-none">
+                  {isCompiling && (
+                    <div className="space-y-1.5 rounded-none">
+                      <div className="flex justify-between items-center text-[10px] font-mono text-gray-400">
+                        <span>COMPILING ROM IMAGES:</span>
+                        <span className={`font-bold ${activeTheme.textClass}`}>{compilationProgress}%</span>
+                      </div>
+                      <div className="w-full bg-zinc-900 h-1 rounded-none overflow-hidden border border-zinc-800">
+                        <div className={`h-full bg-cyan-400 ${activeTheme.bgClass} transition-all duration-300`} style={{ width: `${compilationProgress}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {compileSuccess && !isCompiling && (
+                    <div className="bg-green-950/20 text-green-400 p-2.5 border border-green-900/60 text-[11px] font-mono flex items-start gap-2 animate-fadeIn rounded-none">
+                      <Check className="w-4 h-4 shrink-0" />
+                      <div>
+                        <strong className="block">ROM IMAGE COMPILED SUCCESSFULLY!</strong>
+                        <span>Build file generated: <code className="text-white">/aosp_src/Lumia_MSM8992_OTA.zip</code> ready to deploy to TWRP/fastboot.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={runAospROMCompilation}
+                    disabled={isCompiling}
+                    className={`w-full py-2 text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 border transition-all rounded-none ${
+                      isCompiling 
+                        ? 'border-zinc-800 text-zinc-500 bg-zinc-950 cursor-not-allowed' 
+                        : `${activeTheme.borderClass} ${activeTheme.bgClass} text-white hover:brightness-110`
+                    }`}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isCompiling ? 'animate-spin' : ''}`} />
+                    {isCompiling ? "COMPILING TARGET ROM..." : "COMPILE FULL LUMIA AOSP IMAGE"}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Right Side: Scrollable Code Editor */}
+            <div className="flex-1 bg-black border border-zinc-900 p-4 flex flex-col justify-between min-h-0 rounded-none overflow-hidden">
+              <div className="flex flex-col h-full min-h-0 justify-between">
+                <div className="border-b border-zinc-900 pb-2 mb-3 shrink-0 flex items-center justify-between rounded-none">
+                  <div>
+                    <span className="text-[9px] font-mono text-cyan-400 tracking-wider uppercase block">AOSP SOURCE TREE VIEWER</span>
+                    <h2 className="text-sm font-mono font-bold tracking-tight text-white uppercase">
+                      {selectedCodeFile === 'kotlin-launcher' && "launcher/MainActivity.kt"}
+                      {selectedCodeFile === 'rust-lights' && "hal/lights_hal/src/main.rs"}
+                      {selectedCodeFile === 'rust-audio' && "hal/audio_hal/src/main.rs"}
+                      {selectedCodeFile === 'board-config' && "device/BoardConfig.mk"}
+                    </h2>
+                  </div>
+                  <span className="text-[9px] font-mono bg-zinc-900 px-2 py-0.5 text-zinc-500 border border-zinc-800 rounded-none">READ ONLY</span>
+                </div>
+
+                {/* Main scrollable editor window */}
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto no-scrollbar bg-zinc-950 border border-zinc-900/60 p-4 font-mono text-[11.5px] leading-relaxed text-cyan-300 rounded-none">
+                  {selectedCodeFile === 'kotlin-launcher' && (
+                    <pre className="text-purple-300">
+                      <code>{`package com.nokia.lumia.launcher
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+// Lumia Metro Themes
+enum class LumiaTheme(val color: Color, val name: String) {
+    CYAN(Color(0xFF00ABEC), "Lumia Cyan"),
+    MAGENTA(Color(0xFFD80073), "Lumia Magenta"),
+    LIME(Color(0xFF8CBF26), "Lumia Lime")
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            LumiaOSTheme {
+                LumiaLauncherScreen()
+            }
+        }
+    }
+}
+
+@Composable
+fun LumiaLauncherScreen() {
+    var activeTheme by remember { mutableStateOf(LumiaTheme.CYAN) }
+    var isAppDrawerOpen by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(horizontal = 16.dp, vertical = 24.dp)
+    ) {
+        AnimatedContent(
+            targetState = isAppDrawerOpen,
+            transitionSpec = {
+                if (targetState) {
+                    slideInHorizontally(initialOffsetX = { it }) + fadeIn() with
+                    slideOutHorizontally(targetOffsetX = { -it / 2 }) + fadeOut()
+                } else {
+                    slideInHorizontally(initialOffsetX = { -it / 2 }) + fadeIn() with
+                    slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+                }
+            }
+        ) { openDrawer ->
+            if (openDrawer) {
+                AppDrawerScreen(activeTheme, onBack = { isAppDrawerOpen = false })
+            } else {
+                HomeScreenTiles(activeTheme, onOpenDrawer = { isAppDrawerOpen = true })
+            }
+        }
+    }
+}`}</code>
+                    </pre>
+                  )}
+
+                  {selectedCodeFile === 'rust-lights' && (
+                    <pre className="text-amber-300">
+                      <code>{`//! AOSP Hardware Abstraction Layer (HAL) for the Nokia Lumia Snapdragon 808 LED Backlight.
+//! Implements a modern Binderized Android HAL architecture in Rust.
+//! Handles sysfs manipulation of flashlight intensity registers cleanly.
+
+use std::fs::{File, OpenOptions};
+use std::io::{Write, Result as IoResult};
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+const SYSFS_LIGHT_BRIGHTNESS: &str = "/sys/class/leds/flashlight/brightness";
+const SYSFS_LIGHT_MAX_BRIGHTNESS: &str = "/sys/class/leds/flashlight/max_brightness";
+
+pub struct LumiaLightsHal {
+    brightness_path: &'static str,
+    max_brightness: u8,
+    active_intensity: Arc<Mutex<u8>>,
+}
+
+impl LumiaLightsHal {
+    pub fn new() -> Self {
+        let max_brightness = Self::read_max_brightness().unwrap_or(255);
+        Self {
+            brightness_path: SYSFS_LIGHT_BRIGHTNESS,
+            max_brightness,
+            active_intensity: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    pub fn set_flashlight_intensity(&self, mut value: u8) -> IoResult<()> {
+        if value > self.max_brightness {
+            value = self.max_brightness;
+        }
+
+        // Lock mutex to update active memory map state
+        {
+            let mut intensity = self.active_intensity.lock().unwrap();
+            *intensity = value;
+        }
+
+        let path = Path::new(self.brightness_path);
+        if path.exists() {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)?;
+            
+            writeln!(file, "{}", value)?;
+            file.flush()?;
+        }
+        Ok(())
+    }
+}`}</code>
+                    </pre>
+                  )}
+
+                  {selectedCodeFile === 'rust-audio' && (
+                    <pre className="text-cyan-300">
+                      <code>{`//! AOSP Primary Audio HAL module for Nokia Lumia Snapdragon 808.
+//! Implemented in Rust to interface with ALSA kernel mixer nodes safely.
+
+use std::fs::OpenOptions;
+use std::io::{Write, Result as IoResult};
+use std::path::Path;
+
+const DEV_PCM_OUT: &str = "/dev/snd/pcm_out";
+
+pub struct LumiaAudioHal {
+    device_node: &'static str,
+    sample_rate: u32,
+    channels: u8,
+}
+
+impl LumiaAudioHal {
+    pub fn new() -> Self {
+        Self {
+            device_node: DEV_PCM_OUT,
+            sample_rate: 44100,
+            channels: 2,
+        }
+    }
+
+    pub fn open_output_stream(&self, frequency: u32, wave: AudioWaveform) -> IoResult<()> {
+        let path = Path::new(self.device_node);
+        if path.exists() {
+            let mut device_file = OpenOptions::new()
+                .write(true)
+                .open(path)?;
+
+            let mut sample_buffer = Vec::new();
+            for t in 0..1024 {
+                // Synthesize 16-bit stereo sinusoids...
+                let phase = 2.0 * std::f64::consts::PI * (frequency as f64) * (t as f64) / (self.sample_rate as f64);
+                let val = (phase.sin() * 32767.0) as i16;
+                sample_buffer.extend_from_slice(&val.to_le_bytes());
+            }
+
+            device_file.write_all(&sample_buffer)?;
+            device_file.flush()?;
+        }
+        Ok(())
+    }
+}`}</code>
+                    </pre>
+                  )}
+
+                  {selectedCodeFile === 'board-config' && (
+                    <pre className="text-teal-300">
+                      <code>{`# BoardConfig.mk for Nokia Lumia MSM8992 AOSP Custom Build
+# Defines low-level SoC features, partition mapping, and kernel variables.
+
+TARGET_BOARD_PLATFORM := msm8992
+TARGET_BOOTLOADER_BOARD_NAME := lumia
+
+# Core Architecture Settings (Qualcomm Snapdragon 808 64-bit Hexa-Core)
+TARGET_ARCH := arm64
+TARGET_ARCH_VARIANT := armv8-a
+TARGET_CPU_ABI := arm64-v8a
+
+# File System Partition Sizes (Lumia 32GB Internal storage specs)
+BOARD_BOOTIMAGE_PARTITION_SIZE := 33554432     # 32MB boot
+BOARD_RECOVERYIMAGE_PARTITION_SIZE := 33554432 # 32MB recovery
+BOARD_SYSTEMIMAGE_PARTITION_SIZE := 3221225472   # 3.0GB system
+
+# Compile Rust HAL components into Android system binaries
+TARGET_USES_RUST := true
+BOARD_HAL_LIGHTS_RUST_BIN := lights.primary.lumia
+BOARD_HAL_AUDIO_RUST_BIN := audio.primary.lumia`}</code>
+                    </pre>
+                  )}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
         {/* VIEW 1: HAL Controllers (Hands-on Peripheral Simulations) */}
         {activeTab === 'hal-controllers' && (
           <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto no-scrollbar rounded-none pr-1">
