@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, Mic, MicOff, Volume2, VolumeX, Terminal, ArrowRight, Play, Check } from 'lucide-react';
+import { motion } from 'motion/react';
 import { SystemSettings, Intent } from '../../types';
+import { METRO_THEMES } from '../../data';
 
 interface GeminiAssistantAppProps {
   onClose: () => void;
@@ -46,6 +48,9 @@ export default function GeminiAssistantApp({
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Retrieve active theme mapping
+  const activeTheme = METRO_THEMES[settings.accentColor] || METRO_THEMES.cyan;
 
   // Initialize Speech Recognition if supported
   useEffect(() => {
@@ -112,7 +117,7 @@ export default function GeminiAssistantApp({
     const cleanText = text.replace(/[*#`_\-]/g, '').trim();
     const utterance = new SpeechSynthesisUtterance(cleanText);
     
-    // Try to find a standard friendly English voice
+    // Try to find a friendly voice
     const voices = window.speechSynthesis.getVoices();
     const optimalVoice = voices.find(v => 
       v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Cortana') || v.name.includes('Female'))
@@ -289,27 +294,33 @@ export default function GeminiAssistantApp({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-black text-white p-6 select-none font-sans relative overflow-hidden">
+    <motion.div 
+      initial={{ opacity: 0, y: 35 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 35 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
+      className="h-full flex flex-col bg-black text-white p-6 select-none font-sans relative overflow-hidden rounded-none"
+    >
       {/* App Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-light text-3xl tracking-tight uppercase flex items-center gap-2">
-            <Sparkles className="w-7 h-7 text-cyan-400 animate-pulse" />
+          <h1 className="font-light text-3xl tracking-tight uppercase flex items-center gap-2 rounded-none">
+            <Sparkles className={`w-7 h-7 ${activeTheme.textClass} animate-pulse`} />
             CORTANA
           </h1>
           <p className="text-xs text-gray-400 font-mono tracking-wider">GEMINI AI INTELLIGENT COMPANION</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 rounded-none">
           <button 
             onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className="p-2 border border-zinc-700 hover:border-white transition-colors text-xs flex items-center justify-center"
+            className="p-2 border border-zinc-700 hover:border-white transition-colors text-xs flex items-center justify-center rounded-none"
             title={voiceEnabled ? "Mute Voice Responses" : "Unmute Voice Responses"}
           >
-            {voiceEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-zinc-500" />}
+            {voiceEnabled ? <Volume2 className={`w-4 h-4 ${activeTheme.textClass}`} /> : <VolumeX className="w-4 h-4 text-zinc-500" />}
           </button>
           <button 
             onClick={onClose}
-            className="px-4 py-1.5 border border-white hover:bg-white hover:text-black transition-colors text-xs font-mono"
+            className="px-4 py-1.5 border border-white hover:bg-white hover:text-black transition-colors text-xs font-mono rounded-none"
           >
             BACK
           </button>
@@ -317,13 +328,13 @@ export default function GeminiAssistantApp({
       </div>
 
       {/* Main Container Layout */}
-      <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 rounded-none">
         
         {/* Left Side: Cortana Halo Neural Center & Status Logs */}
-        <div className="md:w-1/3 flex flex-col items-center justify-center bg-zinc-950 p-6 border border-zinc-900 relative">
+        <div className="md:w-1/3 flex flex-col items-center justify-center bg-zinc-950 p-6 border border-zinc-900 relative rounded-none">
           
           {/* Windows Phone Cortana Halo Ring */}
-          <div className="relative w-44 h-44 flex items-center justify-center my-6">
+          <div className="relative w-44 h-44 flex items-center justify-center my-6 rounded-none">
             
             {/* Wave Ripples when listening/thinking */}
             {assistantState === 'listening' && (
@@ -340,8 +351,8 @@ export default function GeminiAssistantApp({
             <div className={`absolute w-36 h-36 rounded-full border-4 border-double transition-all duration-700 ${
               assistantState === 'listening' ? 'border-red-500 scale-105 animate-pulse' :
               assistantState === 'thinking' ? 'border-purple-500 rotate-180 scale-95 border-dashed' :
-              assistantState === 'speaking' ? 'border-cyan-400 scale-110 border-dotted' :
-              'border-cyan-500' // idle
+              assistantState === 'speaking' ? `${activeTheme.borderClass} scale-110 border-dotted` :
+              `${activeTheme.borderClass} opacity-80` // idle
             }`} />
 
             <div className={`absolute w-28 h-28 rounded-full border border-white/10 flex items-center justify-center transition-all duration-500 ${
@@ -353,7 +364,7 @@ export default function GeminiAssistantApp({
                 assistantState === 'listening' ? 'bg-red-500 animate-ping' :
                 assistantState === 'thinking' ? 'bg-purple-400 scale-125' :
                 assistantState === 'speaking' ? 'bg-cyan-300 scale-110' :
-                'bg-cyan-400 scale-100 animate-pulse'
+                `${activeTheme.bgClass} scale-100 animate-pulse`
               }`} />
             </div>
 
@@ -364,7 +375,7 @@ export default function GeminiAssistantApp({
           </div>
 
           {/* Neural state details */}
-          <div className="text-center mb-4">
+          <div className="text-center mb-4 rounded-none">
             <h3 className="text-sm font-semibold text-white/90">
               {assistantState === 'listening' ? "Listening to you..." :
                assistantState === 'thinking' ? "Processing request..." :
@@ -377,16 +388,16 @@ export default function GeminiAssistantApp({
           </div>
 
           {/* Terminal / Live API Log output */}
-          <div className="w-full mt-auto bg-black p-3 font-mono text-[9px] border border-zinc-900">
-            <div className="flex items-center gap-1.5 border-b border-zinc-900 pb-1.5 mb-1.5 text-zinc-500">
-              <Terminal className="w-3 h-3 text-cyan-400" />
+          <div className="w-full mt-auto bg-black p-3 font-mono text-[9px] border border-zinc-900 rounded-none">
+            <div className="flex items-center gap-1.5 border-b border-zinc-900 pb-1.5 mb-1.5 text-zinc-500 rounded-none">
+              <Terminal className={`w-3 h-3 ${activeTheme.textClass}`} />
               <span>LOG: INTEGRATED ASSISTANT CORE</span>
             </div>
             {statusLog.length === 0 ? (
               <span className="text-zinc-600 block">System ready. State: Idle.</span>
             ) : (
               statusLog.map((log, idx) => (
-                <div key={idx} className="text-cyan-400/80 leading-relaxed overflow-hidden text-ellipsis whitespace-nowrap">
+                <div key={idx} className={`${activeTheme.textClass} leading-relaxed overflow-hidden text-ellipsis whitespace-nowrap`}>
                   {log}
                 </div>
               ))
@@ -395,14 +406,14 @@ export default function GeminiAssistantApp({
         </div>
 
         {/* Right Side: Chat Dialog Feed & Command Inputs */}
-        <div className="flex-1 flex flex-col min-h-0 bg-zinc-950 border border-zinc-900">
+        <div className="flex-1 flex flex-col min-h-0 bg-zinc-950 border border-zinc-900 rounded-none">
           
           {/* Messages Feed */}
-          <div className="flex-1 p-4 overflow-y-auto no-scrollbar space-y-4">
+          <div className="flex-1 p-4 overflow-y-auto no-scrollbar space-y-4 rounded-none">
             {messages.map((msg) => (
               <div 
                 key={msg.id}
-                className={`flex flex-col max-w-[85%] ${
+                className={`flex flex-col max-w-[85%] rounded-none ${
                   msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
                 }`}
               >
@@ -412,17 +423,17 @@ export default function GeminiAssistantApp({
                 </span>
 
                 {/* Message Content Tile */}
-                <div className={`p-3.5 text-sm transition-all duration-300 ${
+                <div className={`p-3.5 text-sm transition-all duration-300 rounded-none ${
                   msg.role === 'user' 
-                    ? 'bg-zinc-900 text-white border-r-4 border-cyan-500' 
-                    : 'bg-[#1e1e24] text-white/95 border-l-4 border-cyan-400'
+                    ? `bg-zinc-900 text-white border-r-4 ${activeTheme.borderClass}` 
+                    : `bg-[#1e1e24] text-white/95 border-l-4 ${activeTheme.borderClass}`
                 }`}>
                   <p className="whitespace-pre-line leading-relaxed">{msg.content}</p>
                 </div>
 
                 {/* System actions logs attached inside message bubble */}
                 {msg.actionExecuted && (
-                  <div className="mt-1.5 bg-black border border-zinc-800 text-emerald-400 text-[10px] font-mono py-1 px-2.5 flex items-center gap-1.5">
+                  <div className="mt-1.5 bg-black border border-zinc-800 text-emerald-400 text-[10px] font-mono py-1 px-2.5 flex items-center gap-1.5 rounded-none">
                     <Check className="w-3 h-3 text-emerald-400" />
                     <span>{msg.actionExecuted}</span>
                   </div>
@@ -431,9 +442,9 @@ export default function GeminiAssistantApp({
             ))}
 
             {isProcessing && (
-              <div className="flex flex-col max-w-[85%] mr-auto items-start">
+              <div className="flex flex-col max-w-[85%] mr-auto items-start rounded-none">
                 <span className="text-[9px] font-mono text-zinc-500 mb-1">CORTANA CORE • Thinking</span>
-                <div className="p-3.5 bg-zinc-900 border-l-4 border-purple-500 text-sm text-white/70 italic flex items-center gap-2">
+                <div className="p-3.5 bg-zinc-900 border-l-4 border-purple-500 text-sm text-white/70 italic flex items-center gap-2 rounded-none">
                   <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" />
                   <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:0.2s]" />
                   <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce [animation-delay:0.4s]" />
@@ -446,9 +457,9 @@ export default function GeminiAssistantApp({
           </div>
 
           {/* Interactive Suggestions Hub */}
-          <div className="px-4 py-2 bg-zinc-900/40 border-t border-zinc-900">
+          <div className="px-4 py-2 bg-zinc-900/40 border-t border-zinc-900 rounded-none">
             <span className="text-[9px] font-mono tracking-wider text-zinc-500 uppercase block mb-1.5">Suggested Directives</span>
-            <div className="flex gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
+            <div className="flex gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth rounded-none">
               {QUICK_COMMANDS.map((cmd, i) => (
                 <button
                   key={i}
@@ -457,7 +468,7 @@ export default function GeminiAssistantApp({
                     handleSendMessage(cmd.text);
                   }}
                   disabled={isProcessing}
-                  className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] hover:text-cyan-400 transition-colors whitespace-nowrap flex items-center gap-1"
+                  className={`px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] hover:${activeTheme.textClass} transition-colors whitespace-nowrap flex items-center gap-1 rounded-none`}
                 >
                   <span>{cmd.label}</span>
                   <ArrowRight className="w-2.5 h-2.5 text-zinc-500" />
@@ -467,12 +478,12 @@ export default function GeminiAssistantApp({
           </div>
 
           {/* Input Panel */}
-          <div className="p-4 bg-zinc-950 border-t border-zinc-900 flex gap-2">
+          <div className="p-4 bg-zinc-950 border-t border-zinc-900 flex gap-2 rounded-none">
             {/* Audio Speech-to-text Microphone Button */}
             <button
               onClick={toggleListening}
               disabled={isProcessing}
-              className={`p-3 border flex items-center justify-center transition-colors ${
+              className={`p-3 border flex items-center justify-center transition-colors rounded-none ${
                 isListening 
                   ? 'bg-red-600 border-red-500 text-white animate-pulse' 
                   : 'border-zinc-700 hover:border-white text-zinc-400 hover:text-white'
@@ -490,14 +501,14 @@ export default function GeminiAssistantApp({
               onKeyDown={handleKeyPress}
               disabled={isProcessing}
               placeholder={isListening ? "Listening... Speak now." : "Type a command or question for Cortana..."}
-              className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-white px-4 py-2 text-sm outline-none transition-colors"
+              className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-white px-4 py-2 text-sm outline-none transition-colors rounded-none"
             />
 
             {/* Send Button */}
             <button
               onClick={() => handleSendMessage()}
               disabled={isProcessing || !inputValue.trim()}
-              className="px-4 bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-800 text-white font-semibold transition-colors flex items-center justify-center"
+              className={`px-4 ${activeTheme.bgClass} disabled:bg-zinc-800 text-white font-semibold transition-colors flex items-center justify-center rounded-none`}
             >
               <Send className="w-4 h-4" />
             </button>
@@ -506,6 +517,6 @@ export default function GeminiAssistantApp({
         </div>
 
       </div>
-    </div>
+    </motion.div>
   );
 }
