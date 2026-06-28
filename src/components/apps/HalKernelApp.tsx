@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Cpu, Terminal, Layers, RefreshCw, Zap, Volume2, Bluetooth, Wifi, 
-  HelpCircle, ChevronRight, Binary, FileText, Check, ShieldAlert, Sliders, Play, Square
+  HelpCircle, ChevronRight, Binary, FileText, Check, ShieldAlert, Sliders, Play, Square,
+  Folder, Power, ArrowRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SystemSettings } from '../../types';
@@ -35,7 +36,7 @@ export default function HalKernelApp({
   onUpdateSettings,
   playHapticSound
 }: HalKernelAppProps) {
-  const [activeTab, setActiveTab] = useState<'walkthrough' | 'hal-controllers' | 'kernel-logs' | 'sysfs' | 'aosp-code'>('aosp-code');
+  const [activeTab, setActiveTab] = useState<'walkthrough' | 'hal-controllers' | 'kernel-logs' | 'sysfs' | 'aosp-code' | 'twrp-flasher'>('aosp-code');
   
   // HAL state models
   const [flashlightIntensity, setFlashlightIntensity] = useState(settings.flashlightOn ? 255 : 0);
@@ -67,6 +68,108 @@ export default function HalKernelApp({
   const [compileLogs, setCompileLogs] = useState<string[]>([]);
   const [compileSuccess, setCompileSuccess] = useState(false);
   const compileTerminalEndRef = useRef<HTMLDivElement>(null);
+
+  // TWRP Recovery & Reboot States
+  const [twrpStep, setTwrpStep] = useState<'menu' | 'select-file' | 'swipe-flash' | 'flashing' | 'done'>('menu');
+  const [twrpLogs, setTwrpLogs] = useState<string[]>([]);
+  const [twrpProgress, setTwrpProgress] = useState(0);
+  const [swipePosition, setSwipePosition] = useState(0);
+  const [isRebooting, setIsRebooting] = useState(false);
+  const [rebootStep, setRebootStep] = useState<'off' | 'logo' | 'dots' | 'finished'>('finished');
+  const twrpTerminalEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll TWRP terminal logs
+  useEffect(() => {
+    if (twrpTerminalEndRef.current) {
+      twrpTerminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [twrpLogs]);
+
+  // TWRP zip flashing simulation
+  const runTwrpFlashing = () => {
+    setTwrpStep('flashing');
+    setTwrpProgress(0);
+    setTwrpLogs([]);
+
+    const flashSteps = [
+      { log: "Updating partition details...", progress: 5, delay: 300 },
+      { log: "...done", progress: 8, delay: 150 },
+      { log: "Full OTA package detected.", progress: 12, delay: 200 },
+      { log: "Installing zip file '/sdcard/aosp_src/Lumia_MSM8992_OTA.zip'", progress: 18, delay: 400 },
+      { log: "Checking for MD5 file...", progress: 22, delay: 250 },
+      { log: "Skipping MD5 check: no MD5 file found", progress: 25, delay: 150 },
+      { log: "Verifying zip signature...", progress: 30, delay: 350 },
+      { log: "I:Update binary zip splits: target 'msm8992_lumia' userdebug", progress: 35, delay: 200 },
+      { log: "Erasing old system partition block allocations...", progress: 45, delay: 600 },
+      { log: "Flashing boot.img (Custom Android 11 Linux Kernel)...", progress: 55, delay: 500 },
+      { log: "Flashing system.img (AOSP Core + Jetpack Compose Lumia Launcher)...", progress: 70, delay: 800 },
+      { log: "Flashing vendor.img (Rust lights_hal & audio_hal system binders)...", progress: 85, delay: 600 },
+      { log: "Setting up Rust binder system service links in /system/bin/...", progress: 90, delay: 400 },
+      { log: "Configuring hardware sysfs LED flashlight register max_brightness = 255...", progress: 95, delay: 300 },
+      { log: "Applying SELinux file contexts: system/sepolicy/lights.te active.", progress: 98, delay: 250 },
+      { log: "Script succeeded: result was [/system/bin/success]", progress: 100, delay: 200 },
+      { log: "Successfully flashed custom Lumia AOSP ROM!", progress: 100, delay: 200 }
+    ];
+
+    let current = 0;
+    const executeNext = () => {
+      if (current < flashSteps.length) {
+        const step = flashSteps[current];
+        setTwrpLogs(prev => [...prev, `[TWRP] ${step.log}`]);
+        setTwrpProgress(step.progress);
+        if (playHapticSound) {
+          playHapticSound(500 + step.progress * 4, 0.02, 'sine');
+        }
+        current++;
+        setTimeout(executeNext, step.delay);
+      } else {
+        setTwrpStep('done');
+        if (playHapticSound) {
+          playHapticSound(880, 0.25, 'sine');
+        }
+      }
+    };
+    executeNext();
+  };
+
+  // Simulated Device reboot transition
+  const runDeviceReboot = () => {
+    setIsRebooting(true);
+    setRebootStep('off');
+    if (playHapticSound) playHapticSound(200, 0.2, 'sawtooth');
+
+    // Step 1: Turn off (pitch black)
+    setTimeout(() => {
+      setRebootStep('logo');
+      if (playHapticSound) playHapticSound(500, 0.05, 'sine');
+      
+      // Step 2: Show Nokia / Lumia bootlogo
+      setTimeout(() => {
+        setRebootStep('dots');
+        if (playHapticSound) playHapticSound(650, 0.05, 'sine');
+
+        // Step 3: Spinning / rolling circular dots
+        setTimeout(() => {
+          setRebootStep('finished');
+          setIsRebooting(false);
+          // Go back to homescreen tiles or active view with a nice notification!
+          if (playHapticSound) playHapticSound(1000, 0.15, 'sine');
+          // Update status / carrier as a fun easter-egg
+          onUpdateSettings({ 
+            carrierName: "LUMIA AOSP RUST"
+          });
+          
+          addKernelLog('KERNEL', 'TWRP Boot Loader handoff: Booting fresh compiled custom ROM kernel image.');
+          addKernelLog('HAL', 'Lumia AOSP Rust system binaries initialized. lights.primary.lumia binded.');
+          addKernelLog('HAL', 'audio.primary.lumia registered with ALSA system mixer successfully.');
+          
+          setTwrpStep('menu'); // reset twrp flasher
+          setSwipePosition(0);
+          setActiveTab('hal-controllers'); // Switch to controllers so they can test their shiny new ROM!
+        }, 3500); // 3.5s of spinning dots
+      }, 2000); // 2s of static nokia logo
+    }, 1500); // 1.5s of off blackscreen
+  };
 
   const activeTheme = METRO_THEMES[settings.accentColor] || METRO_THEMES.cyan;
 
@@ -514,6 +617,19 @@ export default function HalKernelApp({
           }`}
         >
           SYSFS & DEV FILESYSTEM
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('twrp-flasher');
+            if (playHapticSound) playHapticSound(600, 0.03, 'sine');
+          }}
+          className={`px-4 py-2 text-xs font-mono tracking-wider uppercase transition-all rounded-none whitespace-nowrap ${
+            activeTab === 'twrp-flasher' 
+              ? 'bg-purple-800 text-white font-bold animate-pulse' 
+              : 'bg-zinc-950 hover:bg-zinc-900 text-purple-400/80 border border-purple-950/40'
+          }`}
+        >
+          ⚡ TWRP RECOVERY FLASHER
         </button>
       </div>
 
@@ -1452,7 +1568,390 @@ BOARD_HAL_AUDIO_RUST_BIN := audio.primary.lumia`}</code>
           </div>
         )}
 
+        {/* VIEW 5: TWRP Recovery Flasher */}
+        {activeTab === 'twrp-flasher' && (
+          <div className="h-full flex flex-col bg-zinc-950 border border-purple-950 p-4 font-mono text-xs rounded-none select-none">
+            {/* TWRP Header banner */}
+            <div className="flex items-center justify-between border-b border-purple-900 pb-2 mb-4 shrink-0 rounded-none bg-purple-950/20 px-3 py-1.5 border border-purple-900/50">
+              <span className="text-xs font-bold text-purple-300 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping inline-block" />
+                ▲ TEAM WIN RECOVERY PROJECT (TWRP) v3.0.2-0
+              </span>
+              <span className="text-[10px] text-purple-400 font-semibold uppercase tracking-wider">LUMIA MSM8992 EDITION</span>
+            </div>
+
+            {/* TWRP Main View Stage */}
+            {twrpStep === 'menu' && (
+              <div className="flex-1 flex flex-col justify-between min-h-0">
+                <div className="text-center py-3 border border-purple-900 bg-purple-950/10 mb-4 rounded-none px-4">
+                  <p className="text-purple-300 font-bold text-sm mb-1 uppercase">TWRP Boot Loader Environment</p>
+                  <p className="text-zinc-400 text-[11px] leading-relaxed">
+                    Flash your compiled Lumia ROM OTA image or wipe partitions here. To sync files, build your custom system image first in the <strong className="text-white">AOSP WORKSPACE</strong>.
+                  </p>
+                </div>
+
+                {/* Grid of 8 classic TWRP big purple actions */}
+                <div className="flex-1 grid grid-cols-2 gap-4 items-center">
+                  <button
+                    onClick={() => {
+                      setTwrpStep('select-file');
+                      if (playHapticSound) playHapticSound(600, 0.05, 'sine');
+                    }}
+                    className="h-20 bg-purple-900 hover:bg-purple-800 border border-purple-700 hover:border-purple-600 transition-all text-white font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Folder className="w-5 h-5 text-purple-200" />
+                    <span>Install</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (playHapticSound) playHapticSound(450, 0.08, 'triangle');
+                      setTwrpLogs(prev => [...prev, `[TWRP] Partition Wipe: Dalvik-Cache cleared`, `[TWRP] Partition Wipe: /cache formatted`]);
+                      alert("Dalvik Cache, /cache, and system logs have been fully wiped!");
+                    }}
+                    className="h-20 bg-zinc-900 hover:bg-zinc-800 border border-purple-950 hover:border-purple-900 transition-all text-purple-300 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <RefreshCw className="w-5 h-5 text-purple-400" />
+                    <span>Wipe</span>
+                  </button>
+
+                  <button
+                    onClick={() => alert("Creating simulated system backup to /sdcard/TWRP/BACKUPS/... done!")}
+                    className="h-20 bg-zinc-900 hover:bg-zinc-800 border border-purple-950 hover:border-purple-900 transition-all text-purple-300 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Binary className="w-5 h-5 text-purple-400" />
+                    <span>Backup</span>
+                  </button>
+
+                  <button
+                    onClick={() => alert("No backup archives detected on /sdcard.")}
+                    className="h-20 bg-zinc-900 hover:bg-zinc-800 border border-purple-950 hover:border-purple-900 transition-all text-purple-300 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Zap className="w-5 h-5 text-purple-400" />
+                    <span>Restore</span>
+                  </button>
+
+                  <button
+                    onClick={() => alert("Simulated partitions: /system, /vendor, /data, /boot auto-mounted as Read/Write.")}
+                    className="h-20 bg-zinc-900 hover:bg-zinc-800 border border-purple-950 hover:border-purple-900 transition-all text-purple-300 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Layers className="w-5 h-5 text-purple-400" />
+                    <span>Mount</span>
+                  </button>
+
+                  <button
+                    className="h-20 bg-zinc-900 opacity-50 cursor-not-allowed border border-purple-950 text-purple-400/50 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Sliders className="w-5 h-5" />
+                    <span>Settings</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setTwrpLogs(prev => [...prev, `[TWRP ADB-SIDELOAD] Shell listening...`]);
+                      alert("TWRP recovery command console opened in background. Ready to receive ADB.");
+                    }}
+                    className="h-20 bg-zinc-900 hover:bg-zinc-800 border border-purple-950 hover:border-purple-900 transition-all text-purple-300 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Terminal className="w-5 h-5 text-purple-400" />
+                    <span>Advanced</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (playHapticSound) playHapticSound(500, 0.05, 'sine');
+                      runDeviceReboot();
+                    }}
+                    className="h-20 bg-red-950/80 hover:bg-red-900/80 border border-red-900 hover:border-red-700 transition-all text-red-200 font-bold text-center flex flex-col items-center justify-center gap-1 uppercase tracking-wider rounded-none"
+                  >
+                    <Power className="w-5 h-5 text-red-300" />
+                    <span>Reboot</span>
+                  </button>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-purple-900/50 text-[10px] text-zinc-500 flex justify-between rounded-none">
+                  <span>MTP STACK: ACTIVE</span>
+                  <span>BATTERY LEVEL: 100%</span>
+                </div>
+              </div>
+            )}
+
+            {twrpStep === 'select-file' && (
+              <div className="flex-1 flex flex-col justify-between min-h-0">
+                <div>
+                  <div className="flex items-center gap-2 mb-3 text-purple-300 font-bold uppercase rounded-none border-b border-purple-900 pb-1.5">
+                    <Folder className="w-4 h-4 text-purple-400" />
+                    <span>Navigate: /sdcard/aosp_src/</span>
+                  </div>
+
+                  <div className="bg-black/50 border border-purple-900/50 divide-y divide-purple-950 rounded-none max-h-72 overflow-y-auto no-scrollbar">
+                    {/* Parent Dir */}
+                    <div 
+                      onClick={() => {
+                        setTwrpStep('menu');
+                        if (playHapticSound) playHapticSound(500, 0.03, 'sine');
+                      }}
+                      className="p-3 hover:bg-purple-950/10 cursor-pointer flex items-center gap-2 text-zinc-400 transition-colors"
+                    >
+                      <Folder className="w-4 h-4" />
+                      <span>.. (Up one level)</span>
+                    </div>
+
+                    {/* Stock Backup */}
+                    <div className="p-3 opacity-50 flex items-center gap-2 text-zinc-500 justify-between">
+                      <span className="flex items-center gap-2">
+                        <Binary className="w-4 h-4 text-purple-600" />
+                        <span>backup_stock_win_phone.win</span>
+                      </span>
+                      <span className="text-[10px] uppercase font-bold text-zinc-600 bg-zinc-900 px-1.5 py-0.5 border border-zinc-800">Win10 Back</span>
+                    </div>
+
+                    {/* GAPPS */}
+                    <div className="p-3 opacity-50 flex items-center gap-2 text-zinc-500 justify-between">
+                      <span className="flex items-center gap-2">
+                        <Folder className="w-4 h-4 text-purple-600" />
+                        <span>gapps_arm64.zip</span>
+                      </span>
+                      <span className="text-[10px] uppercase font-bold text-zinc-600 bg-zinc-900 px-1.5 py-0.5 border border-zinc-800">GApps v11</span>
+                    </div>
+
+                    {/* Lumia AOSP zip */}
+                    <div 
+                      onClick={() => {
+                        if (!compileSuccess) {
+                          alert("Warning: You must compile the Lumia OTA zip in the 'AOSP WORKSPACE' tab first to synchronize changes!");
+                          return;
+                        }
+                        setTwrpStep('swipe-flash');
+                        if (playHapticSound) playHapticSound(600, 0.05, 'sine');
+                      }}
+                      className={`p-3 cursor-pointer flex items-center gap-2 justify-between transition-colors ${
+                        compileSuccess 
+                          ? 'hover:bg-purple-900/20 text-white font-bold border border-purple-500/30' 
+                          : 'opacity-40 text-zinc-500'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Folder className="w-4 h-4 text-purple-400" />
+                        <span className={compileSuccess ? 'text-purple-300' : ''}>Lumia_MSM8992_OTA.zip</span>
+                      </span>
+                      <span>
+                        {compileSuccess ? (
+                          <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/20 px-2 py-0.5 border border-emerald-900/50">Ready to Flash</span>
+                        ) : (
+                          <span className="text-[10px] uppercase font-bold text-amber-500 bg-amber-950/20 px-2 py-0.5 border border-amber-900/50">Not Built</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex gap-3">
+                  <button
+                    onClick={() => {
+                      setTwrpStep('menu');
+                      if (playHapticSound) playHapticSound(500, 0.03, 'sine');
+                    }}
+                    className="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-purple-900 py-3 text-purple-300 font-bold uppercase text-center tracking-wider rounded-none"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {twrpStep === 'swipe-flash' && (
+              <div className="flex-1 flex flex-col justify-between min-h-0">
+                <div className="space-y-4">
+                  <div className="border border-purple-900 bg-purple-950/20 p-4 rounded-none space-y-2">
+                    <p className="text-purple-300 font-bold text-sm border-b border-purple-900 pb-1.5 uppercase">Lumia ZIP Package Details</p>
+                    <div className="space-y-1 text-xs">
+                      <p><span className="text-zinc-500">File:</span> <strong className="text-white">Lumia_MSM8992_OTA.zip</strong></p>
+                      <p><span className="text-zinc-500">Target:</span> <strong className="text-white">Nokia Lumia 950 (AOSP Port)</strong></p>
+                      <p><span className="text-zinc-500">Kernel:</span> <strong className="text-white">Linux Kernel v4.14.117+ (Custom ARM64)</strong></p>
+                      <p><span className="text-zinc-500">Vendor HALs:</span> <strong className="text-white">Rust lights.lumia &amp; audio.lumia</strong></p>
+                      <p><span className="text-zinc-500">System Launcher:</span> <strong className="text-white">Kotlin / Compose Metro Launcher</strong></p>
+                    </div>
+                  </div>
+
+                  <div className="border border-purple-900 p-3 bg-black rounded-none">
+                    <label className="flex items-center gap-2.5 text-zinc-300 cursor-pointer text-xs">
+                      <input type="checkbox" defaultChecked className="accent-purple-600 rounded-none w-4 h-4 border border-purple-900" />
+                      <span>Verify ZIP package signature (recommended)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Tactile Slider confirming flash */}
+                <div className="space-y-4">
+                  <p className="text-center text-[10px] text-purple-400 font-bold uppercase tracking-wider animate-pulse">
+                    Slide / Drag the arrow right to confirm flash
+                  </p>
+
+                  <div className="relative w-full h-14 bg-zinc-900 border border-purple-900 flex items-center justify-between rounded-none overflow-hidden px-1">
+                    {/* Sliding track colored purple based on position */}
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 bg-purple-800 transition-all" 
+                      style={{ width: `${swipePosition}%` }} 
+                    />
+
+                    {/* Interactive drag slider handle */}
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={swipePosition}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setSwipePosition(val);
+                        if (val >= 100) {
+                          runTwrpFlashing();
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+
+                    <div className="absolute left-4 pointer-events-none text-purple-300 font-bold uppercase tracking-wider text-xs">
+                      Swipe to Flash Custom ROM
+                    </div>
+
+                    <div 
+                      className="absolute w-12 h-12 bg-purple-700 hover:bg-purple-600 border border-purple-500 flex items-center justify-center text-white font-black rounded-none transition-all"
+                      style={{ left: `calc(${swipePosition}% * 0.84 + 4px)` }}
+                    >
+                      <ArrowRight className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setTwrpStep('select-file');
+                      setSwipePosition(0);
+                      if (playHapticSound) playHapticSound(500, 0.03, 'sine');
+                    }}
+                    className="w-full bg-zinc-900 hover:bg-zinc-800 border border-purple-900 py-2.5 text-purple-300 font-bold uppercase text-center tracking-wider rounded-none"
+                  >
+                    Back to file list
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {twrpStep === 'flashing' && (
+              <div className="flex-1 flex flex-col justify-between min-h-0">
+                <div className="border border-purple-900 p-3 bg-purple-950/10 mb-4 rounded-none flex items-center justify-between">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-purple-400 block uppercase font-bold tracking-wider">Flashing OTA ZIP File</span>
+                    <span className="text-white font-bold text-xs">Installing Lumia_MSM8992_OTA.zip...</span>
+                  </div>
+                  <span className="text-purple-300 font-bold text-base">{twrpProgress}%</span>
+                </div>
+
+                {/* TWRP installation console */}
+                <div className="flex-1 bg-black p-3 border border-purple-900 font-mono text-[10px] leading-relaxed overflow-y-auto no-scrollbar space-y-1 min-h-0 rounded-none mb-4">
+                  {twrpLogs.map((log, idx) => (
+                    <div key={idx} className="text-zinc-300">
+                      <span className="text-purple-500 font-bold">I:</span> {log}
+                    </div>
+                  ))}
+                  <div ref={twrpTerminalEndRef} />
+                </div>
+
+                {/* Live progress indicator bar */}
+                <div className="w-full h-2 bg-zinc-900 border border-purple-900 overflow-hidden rounded-none mb-1">
+                  <div className="h-full bg-purple-600 transition-all duration-150" style={{ width: `${twrpProgress}%` }} />
+                </div>
+              </div>
+            )}
+
+            {twrpStep === 'done' && (
+              <div className="flex-1 flex flex-col justify-between min-h-0">
+                <div className="text-center py-6 border border-emerald-900/50 bg-emerald-950/10 mb-4 rounded-none px-4 space-y-2">
+                  <div className="w-12 h-12 rounded-full border-2 border-emerald-500 flex items-center justify-center mx-auto text-emerald-400 font-black text-xl mb-1">
+                    ✓
+                  </div>
+                  <p className="text-emerald-400 font-bold text-sm uppercase">Installation Succeeded!</p>
+                  <p className="text-zinc-400 text-xs leading-relaxed max-w-sm mx-auto">
+                    The custom ROM with custom Kotlin Jetpack Compose Metro Launcher, Rust system lights_hal &amp; audio_hal modules, and Snapdragon 808 device profiles was successfully installed.
+                  </p>
+                </div>
+
+                {/* Flashing post actions */}
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      if (playHapticSound) playHapticSound(600, 0.05, 'sine');
+                      runDeviceReboot();
+                    }}
+                    className="w-full bg-purple-700 hover:bg-purple-600 border border-purple-500 py-3 text-white font-bold uppercase text-center tracking-wider rounded-none flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(128,0,128,0.3)]"
+                  >
+                    <Power className="w-4 h-4 text-white" />
+                    <span>Reboot System ROM</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setTwrpStep('menu');
+                      setSwipePosition(0);
+                      if (playHapticSound) playHapticSound(500, 0.03, 'sine');
+                    }}
+                    className="w-full bg-zinc-900 hover:bg-zinc-800 border border-purple-900 py-2.5 text-purple-300 font-bold uppercase text-center tracking-wider rounded-none"
+                  >
+                    Return to Main Menu
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
+
+      {/* 4. REBOOT DEVICE FULL BLACK SCREEN OVERLAY */}
+      {isRebooting && (
+        <div className="absolute inset-0 bg-black z-[999] flex flex-col items-center justify-center font-sans">
+          {rebootStep === 'off' && (
+            <div className="animate-pulse text-zinc-800 font-mono text-[10px] tracking-widest uppercase">
+              REBOOTING...
+            </div>
+          )}
+
+          {rebootStep === 'logo' && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.94 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              transition={{ duration: 0.8 }}
+              className="text-center space-y-4"
+            >
+              {/* Classic Nokia Style White Logo with elegant font */}
+              <h1 className="text-white font-extrabold text-3xl tracking-[12px] uppercase font-sans">
+                NOKIA
+              </h1>
+              <p className="text-zinc-500 font-light text-xs tracking-[4px] uppercase font-mono">
+                Lumia
+              </p>
+            </motion.div>
+          )}
+
+          {rebootStep === 'dots' && (
+            <div className="text-center space-y-8 flex flex-col items-center">
+              {/* Windows Phone signature dots progress animation */}
+              <div className="flex gap-2.5 items-center justify-center">
+                {[0, 1, 2, 3, 4].map((dot) => (
+                  <div 
+                    key={dot}
+                    className="w-2.5 h-2.5 bg-cyan-400 rounded-full animate-[dot-fly_1.6s_infinite_ease-in-out]"
+                    style={{ animationDelay: `${dot * 0.15}s` }}
+                  />
+                ))}
+              </div>
+              <p className="text-cyan-400 font-bold text-[10px] font-mono tracking-widest uppercase">
+                Upgrading system partition blocks...
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
